@@ -5,15 +5,18 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+
 [programs.localnet]
-lazorkit = "HJoSAFHenQfaYuMgYZ8ZfhsRsuSZ8WYDSVm788DqvVEw"
+lazorkit = "DAcTNgSppWiDvfTWa7PMvPmXHAs5DfBnrqRQme8fXJBb"
+transfer_limit = "HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8"
+
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "http://rpc.lazorkit.xyz:8899"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.test.ts"

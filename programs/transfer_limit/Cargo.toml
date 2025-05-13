@@ -1,12 +1,12 @@
 [package]
-name = "lazorkit"
+name = "transfer_limit"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "lazorkit"
+name = "transfer_limit"
 
 [features]
 default = []
@@ -15,9 +15,14 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 anchor-debug = []
+custom-heap = []
+solana = []
 idl-build = ["anchor-lang/idl-build"]
 
 
 [dependencies]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }
+anchor-spl = { version = "0.31.0", features = ["token", "metadata"] }
+
+lazorkit = { path = "../lazorkit", features = ["no-entrypoint"] }
 

@@ -1,11 +1,15 @@
+use crate::constants::PASSKEY_SIZE;
 use anchor_lang::prelude::*;
 
+/// Account that stores authentication data for a smart wallet
 #[account]
 #[derive(Debug, InitSpace)]
 pub struct SmartWalletAuthenticator {
-    pub passkey_pubkey: [u8; 33],
+    /// The public key of the passkey that can authorize transactions
+    pub passkey_pubkey: [u8; PASSKEY_SIZE],
+    /// The smart wallet this authenticator belongs to
     pub smart_wallet: Pubkey,
-    pub nonce: u64,
+    /// Bump seed for PDA derivation
     pub bump: u8,
 }
 

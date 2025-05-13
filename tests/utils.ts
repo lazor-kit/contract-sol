@@ -10,6 +10,36 @@ import {
   Signer,
   TransactionInstruction,
 } from '@solana/web3.js';
+import { sha256 } from 'js-sha256';
+
+export const fundAccountSOL = async (
+  connection: Connection,
+  publicKey: PublicKey,
+  amount: number
+) => {
+  let fundSig = await connection.requestAirdrop(publicKey, amount);
+
+  return getTxDetails(connection, fundSig);
+};
+
+export const getTxDetails = async (connection: Connection, sig) => {
+  const latestBlockHash = await connection.getLatestBlockhash('processed');
+
+  await connection.confirmTransaction(
+    {
+      blockhash: latestBlockHash.blockhash,
+      lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+      signature: sig,
+    },
+    'confirmed'
+  );
+
+  return await connection.getTransaction(sig, {
+    maxSupportedTransactionVersion: 0,
+    commitment: 'confirmed',
+  });
+};
+
 export const createNewMint = async (
   connection: Connection,
   creator: Signer,
@@ -221,4 +251,13 @@ export function createSecp256r1Instruction(
 
 export function getID(): number {
   return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+}
+
+export function hashSeeds(passkey: number[], smartWallet: PublicKey): Buffer {
+  const rawBuffer = Buffer.concat([
+    Buffer.from(passkey),
+    smartWallet.toBuffer(),
+  ]);
+  const hash = sha256.arrayBuffer(rawBuffer);
+  return Buffer.from(hash).subarray(0, 32);
 }
