@@ -30,4 +30,6 @@ pub enum LazorKitError {
     InvalidBump,
     #[msg("Invalid or missing required account")]
     InvalidAccountInput,
+
+    InsufficientFunds,
 }

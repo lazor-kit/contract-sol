@@ -5,11 +5,13 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[programs.devnet]
+default_rule = "B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W"
 
 [programs.localnet]
 lazorkit = "DAcTNgSppWiDvfTWa7PMvPmXHAs5DfBnrqRQme8fXJBb"
 transfer_limit = "HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8"
-
+default_rule = "B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W"
 
 [registry]
 url = "https://api.apr.dev"

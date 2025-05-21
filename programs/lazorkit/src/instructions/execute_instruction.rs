@@ -10,16 +10,22 @@ use crate::{
     ID,
 };
 use anchor_lang::solana_program::sysvar::instructions::ID as IX_ID;
-
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ExecuteInstructionArgs {
     pub passkey_pubkey: [u8; 33],
-    pub cpi_data: Vec<u8>,
     pub signature: Vec<u8>,
     pub message: Vec<u8>,
     pub verify_instruction_index: u8,
-    pub cpi_signer: Option<PdaSigner>,
-    pub call_rule: bool,
+    pub cpi_data: CpiData,
+    pub rule_data: Option<CpiData>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct CpiData {
+    pub data: Vec<u8>,
+    pub signer: Option<PdaSigner>,
+    pub start_index: u8, // starting index in remaining accounts
+    pub length: u8,      // number of accounts to take from remaining accounts
 }
 
 pub fn execute_instruction(
@@ -48,47 +54,68 @@ pub fn execute_instruction(
         args.signature,
     )?;
 
-    // Handle CPI based on rule program configuration
     match ctx.accounts.smart_wallet_data.rule_program {
         Some(rule_program_key) => {
             require!(
-                rule_program_key == ctx.accounts.cpi_program.key(),
-                LazorKitError::InvalidHook
+                rule_program_key == ctx.accounts.rule_program.key(),
+                LazorKitError::InvalidRuleProgram
             );
         }
-        None => {
-            if args.call_rule {
-                require!(
-                    ctx.accounts
-                        .whitelist_rule_programs
-                        .list
-                        .contains(&ctx.accounts.cpi_program.key()),
-                    LazorKitError::InvalidRuleProgram
-                );
-            }
-        }
+        None => {}
     }
+    // // Handle CPI based on rule program configuration
+    // match ctx.accounts.smart_wallet_data.rule_program {
+    //     Some(rule_program_key) => {
+    //         require!(
+    //             rule_program_key == ctx.accounts.cpi_program.key(),
+    //             LazorKitError::InvalidHook
+    //         );
+    //     }
+    //     None => {
+    //         if args.call_rule {
+    //             require!(
+    //                 ctx.accounts
+    //                     .whitelist_rule_programs
+    //                     .list
+    //                     .contains(&ctx.accounts.cpi_program.key()),
+    //                 LazorKitError::InvalidRuleProgram
+    //             );
+    //         }
+    //     }
+    // }
 
-    // Special handling for SOL transfers from smart wallet
-    if ctx.accounts.cpi_program.key() == anchor_lang::solana_program::system_program::ID {
-        require!(
-            ctx.remaining_accounts.len() >= 2,
-            LazorKitError::InvalidAccountInput
-        );
-        let amount = u64::from_le_bytes(args.cpi_data[4..12].try_into().unwrap());
-        transfer_sol_from_pda(
-            &ctx.accounts.smart_wallet,
-            &ctx.remaining_accounts[1],
-            amount,
-        )?;
-    } else {
-        execute_cpi(
-            ctx.remaining_accounts,
-            args.cpi_data,
-            &ctx.accounts.cpi_program,
-            args.cpi_signer,
-        )?;
-    }
+    // let payer = &ctx.accounts.payer;
+    // let payer_balance_before = payer.lamports();
+
+    // // Special handling for SOL transfers from smart wallet and check the discriminator
+    // if ctx.accounts.cpi_program.key() == anchor_lang::solana_program::system_program::ID {
+    //     require!(
+    //         ctx.remaining_accounts.len() >= 2,
+    //         LazorKitError::InvalidAccountInput
+    //     );
+    //     let amount = u64::from_le_bytes(args.cpi_data[4..12].try_into().unwrap());
+    //     transfer_sol_from_pda(
+    //         &ctx.accounts.smart_wallet,
+    //         &ctx.remaining_accounts[1].to_account_info(),
+    //         amount,
+    //     )?;
+    // } else {
+    //     execute_cpi(
+    //         ctx.remaining_accounts,
+    //         args.cpi_data,
+    //         &ctx.accounts.cpi_program,
+    //         args.cpi_signer,
+    //     )?;
+    // }
+
+    // // Check if the payer's balance has changed and reimburse if needed
+    // let payer_balance_after = payer.lamports() - 10000;
+    // let reimbursement = payer_balance_before - payer_balance_after;
+    // transfer_sol_from_pda(
+    //     &ctx.accounts.smart_wallet,
+    //     &ctx.accounts.payer,
+    //     reimbursement,
+    // )?;
 
     Ok(())
 }
@@ -133,6 +160,9 @@ pub struct ExecuteInstruction<'info> {
 
     /// CHECK: This account is used for CPI and is not deserialized.
     pub cpi_program: UncheckedAccount<'info>,
+
+    /// CHECK:
+    pub rule_program: UncheckedAccount<'info>,
 
     #[account(address = IX_ID)]
     /// CHECK:

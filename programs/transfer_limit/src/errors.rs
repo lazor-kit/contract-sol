@@ -15,4 +15,6 @@ pub enum TransferLimitError {
     RuleNotInitialized,
 
     InvalidRuleAccount,
+
+    InvalidAccountInput,
 }

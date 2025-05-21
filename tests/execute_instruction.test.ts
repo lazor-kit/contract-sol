@@ -13,14 +13,19 @@ import {
   MEMBER_SEED,
 } from './constants';
 import { expect } from 'chai';
-import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from '@solana/web3.js';
-import { createSecp256r1Instruction, fundAccountSOL, hashSeeds } from './utils';
+import {
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import { createSecp256r1Instruction, hashSeeds } from './utils';
 import * as dotenv from 'dotenv';
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes';
 
 dotenv.config();
 
-describe.skip('add_member', () => {
+describe.skip('execute_instruction with rule', () => {
   const connection = new anchor.web3.Connection(
     process.env.RPC_URL || 'http://localhost:8899',
     'confirmed'
@@ -51,6 +56,8 @@ describe.skip('add_member', () => {
   let passkeyKeypair: ECDSA.Key;
   let passkeyPubkey: number[];
   let adminMember: anchor.web3.PublicKey;
+  let smartWalletSeeds: Buffer<ArrayBufferLike>;
+  let smartWalletBump: number;
 
   before(async () => {
     const [whitelistRulePrograms] =
@@ -61,63 +68,63 @@ describe.skip('add_member', () => {
 
     const data = await connection.getAccountInfo(whitelistRulePrograms);
 
-    if (data) {
-      const whitelistRuleProgramsData =
-        await lazorProgram.account.whitelistRulePrograms.fetch(
-          whitelistRulePrograms
-        );
+    // if (data) {
+    //   const whitelistRuleProgramsData =
+    //     await lazorProgram.account.whitelistRulePrograms.fetch(
+    //       whitelistRulePrograms
+    //     );
 
-      // check if the whitelist rule programs is empty
-      if (
-        !whitelistRuleProgramsData.list.includes(transferLimitProgram.programId)
-      ) {
-        const txn = new anchor.web3.Transaction().add(
-          await lazorProgram.methods
-            .upsertWhitelistRulePrograms(transferLimitProgram.programId)
-            .accountsPartial({
-              signer: payer.publicKey,
-              whitelistRulePrograms,
-            })
-            .instruction()
-        );
+    //   // check if the whitelist rule programs is empty
+    //   if (
+    //     !whitelistRuleProgramsData.list.includes(transferLimitProgram.programId)
+    //   ) {
+    //     const txn = new anchor.web3.Transaction().add(
+    //       await lazorProgram.methods
+    //         .upsertWhitelistRulePrograms(transferLimitProgram.programId)
+    //         .accountsPartial({
+    //           signer: payer.publicKey,
+    //           whitelistRulePrograms,
+    //         })
+    //         .instruction()
+    //     );
 
-        await sendAndConfirmTransaction(connection, txn, [payer], {
-          commitment: 'confirmed',
-        });
-      }
-    } else {
-      // create the lazor program
-      const txn = new anchor.web3.Transaction().add(
-        await lazorProgram.methods
-          .initialize()
-          .accounts({
-            signer: payer.publicKey,
-          })
-          .instruction()
-      );
+    //     await sendAndConfirmTransaction(connection, txn, [payer], {
+    //       commitment: 'confirmed',
+    //     });
+    //   }
+    // } else {
+    //   // create the lazor program
+    //   const txn = new anchor.web3.Transaction().add(
+    //     await lazorProgram.methods
+    //       .initialize()
+    //       .accounts({
+    //         signer: payer.publicKey,
+    //       })
+    //       .instruction()
+    //   );
 
-      await sendAndConfirmTransaction(connection, txn, [payer], {
-        commitment: 'confirmed',
-      });
+    //   await sendAndConfirmTransaction(connection, txn, [payer], {
+    //     commitment: 'confirmed',
+    //   });
 
-      const upsertWhitelistRuleProgramsTxn = new anchor.web3.Transaction().add(
-        await lazorProgram.methods
-          .upsertWhitelistRulePrograms(transferLimitProgram.programId)
-          .accountsPartial({
-            signer: payer.publicKey,
-            whitelistRulePrograms,
-          })
-          .instruction()
-      );
-      await sendAndConfirmTransaction(
-        connection,
-        upsertWhitelistRuleProgramsTxn,
-        [payer],
-        {
-          commitment: 'confirmed',
-        }
-      );
-    }
+    //   const upsertWhitelistRuleProgramsTxn = new anchor.web3.Transaction().add(
+    //     await lazorProgram.methods
+    //       .upsertWhitelistRulePrograms(transferLimitProgram.programId)
+    //       .accountsPartial({
+    //         signer: payer.publicKey,
+    //         whitelistRulePrograms,
+    //       })
+    //       .instruction()
+    //   );
+    //   await sendAndConfirmTransaction(
+    //     connection,
+    //     upsertWhitelistRuleProgramsTxn,
+    //     [payer],
+    //     {
+    //       commitment: 'confirmed',
+    //     }
+    //   );
+    // }
 
     passkeyKeypair = ECDSA.generateKey();
 
@@ -129,13 +136,20 @@ describe.skip('add_member', () => {
       smartWalletSeq
     );
 
+    smartWalletSeeds = Buffer.concat([
+      Buffer.from(SMART_WALLET_SEED),
+      currentSmartWalletSeq.seq.toArrayLike(Buffer, 'le', 8),
+    ]);
+
     smartWallet = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from(SMART_WALLET_SEED),
-        currentSmartWalletSeq.seq.toArrayLike(Buffer, 'le', 8),
-      ],
+      [smartWalletSeeds],
       lazorProgram.programId
     )[0];
+
+    smartWalletBump = anchor.web3.PublicKey.findProgramAddressSync(
+      [smartWalletSeeds],
+      lazorProgram.programId
+    )[1];
 
     smartWalletData = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(SMART_WALLET_DATA_SEED), smartWallet.toBuffer()],
@@ -188,12 +202,14 @@ describe.skip('add_member', () => {
       ],
       transferLimitProgram.programId
     )[0];
+  });
 
+  it('Initialize rule with SOL', async () => {
     const [ruleData] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from(RULE_DATA_SEED),
         smartWallet.toBuffer(),
-        anchor.web3.PublicKey.default.toBuffer(),
+        PublicKey.default.toBuffer(),
       ],
       transferLimitProgram.programId
     );
@@ -202,7 +218,7 @@ describe.skip('add_member', () => {
       .initRule({
         passkeyPubkey: passkeyPubkey,
         token: null,
-        limitAmount: new anchor.BN(LAMPORTS_PER_SOL),
+        limitAmount: new anchor.BN(LAMPORTS_PER_SOL / 10),
         limitPeriod: new anchor.BN(0),
       })
       .accountsPartial({
@@ -248,73 +264,66 @@ describe.skip('add_member', () => {
           .instruction()
       );
 
-    await sendAndConfirmTransaction(connection, executeTxn, [payer], {
-      commitment: 'confirmed',
-    });
-  });
-
-  it('Add member', async () => {
-    const newPasskeyKeypair = ECDSA.generateKey();
-    const newPasskeyPubkey = Array.from(
-      Buffer.from(newPasskeyKeypair.toCompressedPublicKey(), 'base64')
-    );
-
-    const [newSmartWalletAuthenticator, newSmartWalletAuthenticatorBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [hashSeeds(newPasskeyPubkey, smartWallet)],
-        lazorProgram.programId
-      );
-
-    const [member] = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from(MEMBER_SEED),
-        smartWallet.toBuffer(),
-        newSmartWalletAuthenticator.toBuffer(),
-      ],
-      transferLimitProgram.programId
-    );
-
-    const addMemberIns = await transferLimitProgram.methods
-      .addMember(newPasskeyPubkey)
-      .accountsPartial({
-        payer: payer.publicKey,
-        smartWalletAuthenticator,
-        newSmartWalletAuthenticator,
-        admin: adminMember,
-        member,
-      })
-      .instruction();
-
-    const message = Buffer.from('Hello');
-    const signatureBytes = Buffer.from(passkeyKeypair.sign(message), 'base64');
-
-    const verifySignatureIns = createSecp256r1Instruction(
-      message,
-      Buffer.from(passkeyPubkey),
-      signatureBytes
-    );
-
-    let remainingAccounts: anchor.web3.AccountMeta[] = addMemberIns.keys.map(
-      (key) => {
-        return {
-          pubkey: key.pubkey,
-          isWritable: key.isWritable,
-          isSigner:
-            key.pubkey === newSmartWalletAuthenticator ? false : key.isSigner,
-        };
+    const sig = await sendAndConfirmTransaction(
+      connection,
+      executeTxn,
+      [payer],
+      {
+        commitment: 'confirmed',
+        skipPreflight: true,
       }
     );
+    console.log(sig);
 
-    const executeIns = await lazorProgram.methods
+    // transfer sol from smart-wallet to payer
+    const transferSolIns = anchor.web3.SystemProgram.transfer({
+      fromPubkey: smartWallet,
+      toPubkey: Keypair.generate().publicKey,
+      lamports: LAMPORTS_PER_SOL / 1000,
+    });
+
+    let remainingAccounts = transferSolIns.keys.map((key) => {
+      return {
+        pubkey: key.pubkey,
+        isWritable: true,
+        isSigner: false,
+      };
+    });
+
+    const executeIns = await transferLimitProgram.methods
       .executeInstruction({
         passkeyPubkey: passkeyPubkey,
-        cpiData: addMemberIns.data,
+        token: null,
+        cpiData: transferSolIns.data,
+      })
+      .accountsPartial({
+        smartWallet,
+        smartWalletData,
+        smartWalletAuthenticator,
+        cpiProgram: anchor.web3.SystemProgram.programId,
+        ruleData,
+      })
+      .remainingAccounts(remainingAccounts)
+      .instruction();
+
+    let remainingAccountsLazor = executeIns.keys.map((key) => {
+      return {
+        pubkey: key.pubkey,
+        isWritable: true,
+        isSigner: key.pubkey == smartWallet ? false : key.isSigner,
+      };
+    });
+
+    const executeInsLazor = await lazorProgram.methods
+      .executeInstruction({
+        passkeyPubkey: passkeyPubkey,
+        cpiData: executeIns.data,
         signature: signatureBytes,
         message,
         verifyInstructionIndex: 0,
         cpiSigner: {
-          seeds: Buffer.from(hashSeeds(newPasskeyPubkey, smartWallet)),
-          bump: newSmartWalletAuthenticatorBump,
+          seeds: smartWalletSeeds,
+          bump: smartWalletBump,
         },
         callRule: true,
       })
@@ -325,18 +334,25 @@ describe.skip('add_member', () => {
         smartWalletAuthenticator,
         cpiProgram: transferLimitProgram.programId,
       })
-      .remainingAccounts(remainingAccounts)
+      .remainingAccounts(remainingAccountsLazor)
       .instruction();
 
-    const txn = new anchor.web3.Transaction()
-      .add(verifySignatureIns)
-      .add(executeIns);
+    const verifyInstruction = createSecp256r1Instruction(
+      message,
+      Buffer.from(passkeyPubkey),
+      signatureBytes
+    );
 
-    const sig = await sendAndConfirmTransaction(connection, txn, [payer], {
-      commitment: 'confirmed',
-      skipPreflight: true,
-    });
+    const sigLazor = await sendAndConfirmTransaction(
+      connection,
+      new anchor.web3.Transaction().add(verifyInstruction).add(executeInsLazor),
+      [payer],
+      {
+        commitment: 'confirmed',
+        skipPreflight: true,
+      }
+    );
 
-    console.log(sig);
+    console.log(sigLazor);
   });
 });
