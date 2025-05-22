@@ -3,7 +3,7 @@ use anchor_lang::{prelude::*, solana_program::sysvar::instructions::load_instruc
 use crate::{
     constants::SMART_WALLET_SEED,
     error::LazorKitError,
-    state::{SmartWalletAuthenticator, SmartWalletData, WhitelistRulePrograms},
+    state::{SmartWalletAuthenticator, SmartWalletConfig, WhitelistRulePrograms},
     utils::{
         execute_cpi, transfer_sol_from_pda, verify_secp256r1_instruction, PasskeyExt, PdaSigner,
     },
@@ -111,7 +111,7 @@ pub fn execute_instruction(
             amount,
         )?;
     } else {
-        let wallet_data = &ctx.accounts.smart_wallet_data;
+        let wallet_data = &ctx.accounts.smart_wallet_config;
         let wallet_signer = PdaSigner {
             seeds: [SMART_WALLET_SEED, wallet_data.id.to_le_bytes().as_ref()].concat(),
             bump: wallet_data.bump,
@@ -146,7 +146,7 @@ pub struct ExecuteInstruction<'info> {
 
     #[account(
         mut,
-        seeds = [SMART_WALLET_SEED, smart_wallet_data.id.to_le_bytes().as_ref()],
+        seeds = [SMART_WALLET_SEED, smart_wallet_config.id.to_le_bytes().as_ref()],
         bump,
         owner = ID,
     )]
@@ -155,11 +155,11 @@ pub struct ExecuteInstruction<'info> {
 
     #[account(
         mut,
-        seeds = [SmartWalletData::PREFIX_SEED, smart_wallet.key().as_ref()],
+        seeds = [SmartWalletConfig::PREFIX_SEED, smart_wallet.key().as_ref()],
         bump,
         owner = ID,
     )]
-    pub smart_wallet_data: Account<'info, SmartWalletData>,
+    pub smart_wallet_config: Account<'info, SmartWalletConfig>,
 
     #[account(
         seeds = [args.passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],

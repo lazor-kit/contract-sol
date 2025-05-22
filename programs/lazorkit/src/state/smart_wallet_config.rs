@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 /// Data account for a smart wallet
 #[account]
 #[derive(Default, InitSpace)]
-pub struct SmartWalletData {
+pub struct SmartWalletConfig {
     /// Unique identifier for this smart wallet
     pub id: u64,
     /// Optional rule program that governs this wallet's operations
@@ -12,6 +12,6 @@ pub struct SmartWalletData {
     pub bump: u8,
 }
 
-impl SmartWalletData {
-    pub const PREFIX_SEED: &'static [u8] = b"smart_wallet_data";
+impl SmartWalletConfig {
+    pub const PREFIX_SEED: &'static [u8] = b"smart_wallet_config";
 }

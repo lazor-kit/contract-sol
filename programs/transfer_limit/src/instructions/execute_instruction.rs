@@ -4,7 +4,7 @@ use lazorkit::utils::transfer_sol_from_pda;
 use lazorkit::{
     constants::SMART_WALLET_SEED,
     program::Lazorkit,
-    state::{SmartWalletAuthenticator, SmartWalletData},
+    state::{SmartWalletAuthenticator, SmartWalletConfig},
     utils::{execute_cpi, PasskeyExt, PdaSigner},
 };
 
@@ -32,7 +32,7 @@ pub fn execute_instruction<'c: 'info, 'info>(
 ) -> Result<()> {
     let member = &ctx.accounts.member;
     let was_initialized = ctx.accounts.rule_data.is_initialized;
-    let smart_wallet_data = &ctx.accounts.smart_wallet_data;
+    let smart_wallet_config = &ctx.accounts.smart_wallet_config;
 
     // Handle SOL transfer
     if ctx.accounts.cpi_program.key() == anchor_lang::solana_program::system_program::ID {
@@ -40,7 +40,7 @@ pub fn execute_instruction<'c: 'info, 'info>(
     }
 
     // Handle other CPIs
-    handle_cpi(&ctx, &args, member, was_initialized, smart_wallet_data)
+    handle_cpi(&ctx, &args, member, was_initialized, smart_wallet_config)
 }
 
 fn handle_sol_transfer<'info>(
@@ -78,12 +78,12 @@ fn handle_cpi<'info>(
     args: &ExecuteInstructionArgs,
     member: &Account<Member>,
     was_initialized: bool,
-    smart_wallet_data: &Account<SmartWalletData>,
+    smart_wallet_config: &Account<SmartWalletConfig>,
 ) -> Result<()> {
     if member.member_type == MemberType::Member && was_initialized {
         validate_cpi(ctx, args)?;
     } else {
-        execute_cpi_with_signer(ctx, args, smart_wallet_data)?;
+        execute_cpi_with_signer(ctx, args, smart_wallet_config)?;
 
         // Close rule if newly created but not used
         if !was_initialized {
@@ -155,9 +155,9 @@ fn validate_cpi<'info>(
 fn execute_cpi_with_signer<'info>(
     ctx: &Context<'_, '_, '_, 'info, ExecuteInstruction<'info>>,
     args: &ExecuteInstructionArgs,
-    smart_wallet_data: &Account<SmartWalletData>,
+    smart_wallet_config: &Account<SmartWalletConfig>,
 ) -> Result<()> {
-    let smart_wallet_signer = [SMART_WALLET_SEED, &smart_wallet_data.id.to_le_bytes()].concat();
+    let smart_wallet_signer = [SMART_WALLET_SEED, &smart_wallet_config.id.to_le_bytes()].concat();
 
     execute_cpi(
         ctx.remaining_accounts,
@@ -165,7 +165,7 @@ fn execute_cpi_with_signer<'info>(
         &ctx.accounts.cpi_program,
         Some(PdaSigner {
             seeds: smart_wallet_signer,
-            bump: smart_wallet_data.bump,
+            bump: smart_wallet_config.bump,
         }),
     )
 }
@@ -199,11 +199,11 @@ pub struct ExecuteInstruction<'info> {
 
     /// Smart wallet data account storing configuration
     #[account(
-        seeds  = [SmartWalletData::PREFIX_SEED, smart_wallet.key().as_ref()],
+        seeds  = [SmartWalletConfig::PREFIX_SEED, smart_wallet.key().as_ref()],
         bump,
         seeds::program = lazorkit.key(),
     )]
-    pub smart_wallet_data: Account<'info, SmartWalletData>,
+    pub smart_wallet_config: Account<'info, SmartWalletConfig>,
 
     /// Authenticator account for passkey verification
     #[account(

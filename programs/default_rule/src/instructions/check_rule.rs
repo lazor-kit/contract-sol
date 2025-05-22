@@ -1,5 +1,3 @@
-use core::str;
-
 use anchor_lang::prelude::*;
 
 use crate::{error::RuleError, state::Rule, ID};

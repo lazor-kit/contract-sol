@@ -7,7 +7,7 @@
 // import {
 //   SMART_WALLET_SEQ_SEED,
 //   SMART_WALLET_SEED,
-//   SMART_WALLET_DATA_SEED,
+//   SMART_WALLET_CONFIG_SEED,
 //   WHITELIST_RULE_PROGRAMS_SEED,
 //   RULE_DATA_SEED,
 //   MEMBER_SEED,
@@ -50,7 +50,7 @@
 //     lazorProgram.programId
 //   );
 //   let smartWallet: anchor.web3.PublicKey;
-//   let smartWalletData: anchor.web3.PublicKey;
+//   let smartWalletConfig: anchor.web3.PublicKey;
 //   let smartWalletAuthenticator: anchor.web3.PublicKey;
 //   let passkeyKeypair: ECDSA.Key;
 //   let passkeyPubkey: number[];
@@ -141,8 +141,8 @@
 //       lazorProgram.programId
 //     )[0];
 
-//     smartWalletData = anchor.web3.PublicKey.findProgramAddressSync(
-//       [Buffer.from(SMART_WALLET_DATA_SEED), smartWallet.toBuffer()],
+//     smartWalletConfig = anchor.web3.PublicKey.findProgramAddressSync(
+//       [Buffer.from(SMART_WALLET_CONFIG_SEED), smartWallet.toBuffer()],
 //       lazorProgram.programId
 //     )[0];
 
@@ -173,7 +173,7 @@
 //         .accountsPartial({
 //           signer: payer.publicKey,
 //           smartWallet,
-//           smartWalletData,
+//           smartWalletConfig,
 //           smartWalletAuthenticator,
 //         })
 //         .instruction()
@@ -214,7 +214,7 @@
 //       .accountsPartial({
 //         payer: payer.publicKey,
 //         smartWallet,
-//         smartWalletData,
+//         smartWalletConfig,
 //         smartWalletAuthenticator,
 //         member: adminMember,
 //         ruleData,
@@ -246,7 +246,7 @@
 //           .accountsPartial({
 //             payer: payer.publicKey,
 //             smartWallet,
-//             smartWalletData,
+//             smartWalletConfig,
 //             smartWalletAuthenticator,
 //             cpiProgram: transferLimitProgram.programId,
 //           })

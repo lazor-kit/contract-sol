@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::{AUTHORITY_SEED, PASSKEY_SIZE, SMART_WALLET_SEED},
     state::{
-        Config, SmartWalletAuthenticator, SmartWalletData, SmartWalletSeq, WhitelistRulePrograms,
+        Config, SmartWalletAuthenticator, SmartWalletConfig, SmartWalletSeq, WhitelistRulePrograms,
     },
     utils::{execute_cpi, transfer_sol_from_pda, PasskeyExt, PdaSigner},
     ID,
@@ -14,11 +14,11 @@ pub fn create_smart_wallet(
     passkey_pubkey: [u8; PASSKEY_SIZE],
     rule_data: Vec<u8>,
 ) -> Result<()> {
-    let wallet_data = &mut ctx.accounts.smart_wallet_data;
+    let wallet_data = &mut ctx.accounts.smart_wallet_config;
     let sequence_account = &mut ctx.accounts.smart_wallet_seq;
     let smart_wallet_authenticator = &mut ctx.accounts.smart_wallet_authenticator;
 
-    wallet_data.set_inner(SmartWalletData {
+    wallet_data.set_inner(SmartWalletConfig {
         rule_program: ctx.accounts.config.default_rule_program,
         id: sequence_account.seq,
         bump: ctx.bumps.smart_wallet,
@@ -88,11 +88,11 @@ pub struct CreateSmartWallet<'info> {
     #[account(
         init,
         payer = signer,
-        space = 8 + SmartWalletData::INIT_SPACE,
-        seeds = [SmartWalletData::PREFIX_SEED, smart_wallet.key().as_ref()],
+        space = 8 + SmartWalletConfig::INIT_SPACE,
+        seeds = [SmartWalletConfig::PREFIX_SEED, smart_wallet.key().as_ref()],
         bump
     )]
-    pub smart_wallet_data: Box<Account<'info, SmartWalletData>>,
+    pub smart_wallet_config: Box<Account<'info, SmartWalletConfig>>,
 
     #[account(
         init,

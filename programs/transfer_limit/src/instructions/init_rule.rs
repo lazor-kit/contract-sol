@@ -2,11 +2,11 @@ use anchor_lang::prelude::*;
 use lazorkit::{
     constants::SMART_WALLET_SEED,
     program::Lazorkit,
-    state::{SmartWalletAuthenticator, SmartWalletData},
+    state::{SmartWalletAuthenticator, SmartWalletConfig},
     utils::PasskeyExt,
 };
 
-use crate::{state::*, ID};
+use crate::state::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitRuleArgs {
@@ -17,9 +17,9 @@ pub struct InitRuleArgs {
 }
 
 pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
-    // let smart_wallet_data = &mut ctx.accounts.smart_wallet_data;
+    // let smart_wallet_config = &mut ctx.accounts.smart_wallet_config;
 
-    // smart_wallet_data.rule_program = Some(ID);
+    // smart_wallet_config.rule_program = Some(ID);
 
     let rule_data = &mut ctx.accounts.rule_data;
     rule_data.set_inner(RuleData {
@@ -49,7 +49,7 @@ pub struct InitRule<'info> {
     pub payer: Signer<'info>,
 
     #[account(
-        seeds = [SMART_WALLET_SEED, smart_wallet_data.id.to_le_bytes().as_ref()],
+        seeds = [SMART_WALLET_SEED, smart_wallet_config.id.to_le_bytes().as_ref()],
         bump,
         seeds::program = lazorkit.key(), // LazorKit ID
     )]
@@ -76,11 +76,11 @@ pub struct InitRule<'info> {
 
     #[account(
         mut,
-        seeds  = [SmartWalletData::PREFIX_SEED, smart_wallet.key().as_ref()],
+        seeds  = [SmartWalletConfig::PREFIX_SEED, smart_wallet.key().as_ref()],
         bump,
         seeds::program = lazorkit.key(), // LazorKit ID
     )]
-    pub smart_wallet_data: Account<'info, SmartWalletData>,
+    pub smart_wallet_config: Account<'info, SmartWalletConfig>,
 
     #[account(
         seeds = [args.passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],
