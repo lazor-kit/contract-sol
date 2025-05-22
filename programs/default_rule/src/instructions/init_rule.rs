@@ -2,39 +2,39 @@ use crate::error::RuleError;
 use crate::state::{Config, Rule};
 use crate::ID;
 use anchor_lang::prelude::*;
-use lazorkit::{program::Lazorkit, state::SmartWalletAuthenticator, utils::PasskeyExt};
+use lazorkit::program::Lazorkit;
 
-pub fn init_rule(ctx: Context<CreateRule>, passkey_pubkey: [u8; 33]) -> Result<()> {
+pub fn init_rule(ctx: Context<InitRule>) -> Result<()> {
     let rule = &mut ctx.accounts.rule;
 
-    // check rule is created or not
-    if rule.is_initialized {
-        // need to check that admin of smart-wallet
-        
-    } else {
-    }
+    rule.smart_wallet = ctx.accounts.smart_wallet.key();
+    rule.admin = ctx.accounts.smart_wallet_authenticator.key();
+    rule.is_initialized = true;
+
     Ok(())
 }
 
 #[derive(Accounts)]
-#[instruction(passkey_pubkey: [u8; 33])]
-pub struct CreateRule<'info> {
+pub struct InitRule<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
-    pub author: Signer<'info>,
+    pub lazorkit_authority: Signer<'info>,
 
     #[account(
-        owner = ID
+        owner = ID,
+        constraint = lazorkit_authority.key() == config.authority @ RuleError::UnAuthorize,
     )]
     pub config: Account<'info, Config>,
 
     /// CHECK:
     pub smart_wallet: UncheckedAccount<'info>,
 
+    /// CHECK
+    pub smart_wallet_authenticator: UncheckedAccount<'info>,
+
     #[account(
-        init_if_needed,
+        init,
         payer = payer,
         space = 8 + Rule::INIT_SPACE,
         seeds = [b"rule".as_ref(), smart_wallet.key().as_ref()],

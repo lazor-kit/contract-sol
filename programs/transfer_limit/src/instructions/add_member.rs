@@ -39,7 +39,6 @@ pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33]) -> Resu
         passkey_pubkey: new_passkey_pubkey,
         smart_wallet: smart_wallet_authenticator.smart_wallet,
         bump: expected_bump,
-        is_initialized: true,
     });
 
     Ok(())

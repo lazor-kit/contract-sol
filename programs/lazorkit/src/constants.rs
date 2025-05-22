@@ -8,3 +8,5 @@ pub const SMART_WALLET_SEED: &[u8] = b"smart_wallet";
 
 /// Size constants for account data
 pub const PASSKEY_SIZE: usize = 33; // Secp256r1 compressed pubkey size
+
+pub const AUTHORITY_SEED: &[u8] = b"authority";

@@ -16,7 +16,7 @@ pub struct Initialize<'info> {
     #[account(
         init_if_needed,
         payer = signer,
-        space = 8 + Conifg::INIT_SPACE,
+        space = 8 + Config::INIT_SPACE,
         seeds = [b"config"],
         bump,
     )]

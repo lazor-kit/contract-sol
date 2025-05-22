@@ -13,7 +13,15 @@ pub mod default_rule {
 
     use super::*;
 
-    pub fn upsert_rule(ctx: Context<CreateRule>, auth_passkey_pubkey: [u8; 33]) -> Result<()> {
-        instructions::upsert_rule(ctx, auth_passkey_pubkey)
+    pub fn initialize(ctx: Context<Initialize>, lazorkit_author: Pubkey) -> Result<()> {
+        instructions::initialize(ctx, lazorkit_author)
+    }
+
+    pub fn init_rule(ctx: Context<InitRule>) -> Result<()> {
+        instructions::init_rule(ctx)
+    }
+
+    pub fn check_rule(_ctx: Context<CheckRule>) -> Result<()> {
+        instructions::check_rule(_ctx)
     }
 }

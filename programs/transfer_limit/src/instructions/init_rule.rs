@@ -17,9 +17,9 @@ pub struct InitRuleArgs {
 }
 
 pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
-    let smart_wallet_data = &mut ctx.accounts.smart_wallet_data;
+    // let smart_wallet_data = &mut ctx.accounts.smart_wallet_data;
 
-    smart_wallet_data.rule_program = Some(ID);
+    // smart_wallet_data.rule_program = Some(ID);
 
     let rule_data = &mut ctx.accounts.rule_data;
     rule_data.set_inner(RuleData {

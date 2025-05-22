@@ -1,25 +1,25 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{PASSKEY_SIZE, SMART_WALLET_SEED},
+    constants::{AUTHORITY_SEED, PASSKEY_SIZE, SMART_WALLET_SEED},
     state::{
         Config, SmartWalletAuthenticator, SmartWalletData, SmartWalletSeq, WhitelistRulePrograms,
     },
-    utils::{execute_cpi, transfer_sol_from_pda, PasskeyExt},
+    utils::{execute_cpi, transfer_sol_from_pda, PasskeyExt, PdaSigner},
     ID,
 };
 
 pub fn create_smart_wallet(
     ctx: Context<CreateSmartWallet>,
     passkey_pubkey: [u8; PASSKEY_SIZE],
-    cpi_data: Vec<u8>,
+    rule_data: Vec<u8>,
 ) -> Result<()> {
     let wallet_data = &mut ctx.accounts.smart_wallet_data;
     let sequence_account = &mut ctx.accounts.smart_wallet_seq;
     let smart_wallet_authenticator = &mut ctx.accounts.smart_wallet_authenticator;
 
     wallet_data.set_inner(SmartWalletData {
-        rule_program: None,
+        rule_program: ctx.accounts.config.default_rule_program,
         id: sequence_account.seq,
         bump: ctx.bumps.smart_wallet,
     });
@@ -31,11 +31,16 @@ pub fn create_smart_wallet(
         bump: ctx.bumps.smart_wallet_authenticator,
     });
 
+    let signer = PdaSigner {
+        seeds: AUTHORITY_SEED.to_vec(),
+        bump: ctx.accounts.config.authority_bump,
+    };
+
     execute_cpi(
         &ctx.remaining_accounts,
-        cpi_data,
+        rule_data,
         &ctx.accounts.default_rule_program,
-        None,
+        Some(signer),
     )?;
 
     sequence_account.seq += 1;
@@ -55,6 +60,7 @@ pub struct CreateSmartWallet<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
+    /// CHECK: This account is only used for its public key and seeds.
     #[account(
         mut,
         seeds = [SmartWalletSeq::PREFIX_SEED],
@@ -98,7 +104,6 @@ pub struct CreateSmartWallet<'info> {
     pub smart_wallet_authenticator: Box<Account<'info, SmartWalletAuthenticator>>,
 
     #[account(
-        mut,
         seeds = [Config::PREFIX_SEED],
         bump,
         owner = ID

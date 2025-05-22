@@ -25,9 +25,9 @@ pub mod lazorkit {
     pub fn create_smart_wallet(
         ctx: Context<CreateSmartWallet>,
         passkey_pubkey: [u8; PASSKEY_SIZE],
-        cpi_data: Vec<u8>,
+        rule_data: Vec<u8>,
     ) -> Result<()> {
-        instructions::create_smart_wallet(ctx, passkey_pubkey, cpi_data)
+        instructions::create_smart_wallet(ctx, passkey_pubkey, rule_data)
     }
 
     /// Execute an instruction with passkey authentication

@@ -1,6 +1,9 @@
+mod check_rule;
+mod init_rule;
 mod initialize;
-mod upsert_rule;
 
-pub use upsert_rule::*;
+pub use init_rule::*;
 
 pub use initialize::*;
+
+pub use check_rule::*;
