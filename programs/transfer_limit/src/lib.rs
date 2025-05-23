@@ -13,6 +13,10 @@ declare_id!("HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8");
 pub mod transfer_limit {
     use super::*;
 
+    pub fn initialize(ctx: Context<Initialize>, lazorkit_author: Pubkey) -> Result<()> {
+        instructions::initialize(ctx, lazorkit_author)
+    }
+
     pub fn init_rule(ctx: Context<InitRule>, init_rule_args: InitRuleArgs) -> Result<()> {
         instructions::init_rule(ctx, init_rule_args)
     }

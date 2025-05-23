@@ -11,6 +11,7 @@ pub struct CheckRule<'info> {
     pub smart_wallet_authenticator: Signer<'info>,
 
     #[account(
+        mut,
         owner = ID,
         constraint = smart_wallet_authenticator.key() == rule.admin @ RuleError::UnAuthorize,
     )]

@@ -24,4 +24,8 @@ pub mod default_rule {
     pub fn check_rule(_ctx: Context<CheckRule>) -> Result<()> {
         instructions::check_rule(_ctx)
     }
+
+    pub fn destroy(ctx: Context<Destroy>) -> Result<()> {
+        instructions::destroy(ctx)
+    }
 }

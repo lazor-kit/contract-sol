@@ -182,3 +182,13 @@ pub fn transfer_sol_from_pda(from: &AccountInfo, to: &AccountInfo, amount: u64) 
     **to.try_borrow_mut_lamports()? += amount;
     Ok(())
 }
+
+pub fn sighash(namespace: &str, name: &str) -> [u8; 8] {
+    let preimage = format!("{}:{}", namespace, name);
+
+    let mut sighash = [0u8; 8];
+    sighash.copy_from_slice(
+        &anchor_lang::solana_program::hash::hash(preimage.as_bytes()).to_bytes()[..8],
+    );
+    sighash
+}

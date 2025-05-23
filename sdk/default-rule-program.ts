@@ -81,4 +81,19 @@ export class DefaultRuleProgram {
       })
       .instruction();
   }
+
+  async destroyIns(
+    payer: anchor.web3.PublicKey,
+    smartWallet: anchor.web3.PublicKey,
+    smartWalletAuthenticator: anchor.web3.PublicKey
+  ) {
+    return await this.program.methods
+      .destroy()
+      .accountsPartial({
+        rule: this.rule(smartWallet),
+        smartWalletAuthenticator,
+        smartWallet,
+      })
+      .instruction();
+  }
 }

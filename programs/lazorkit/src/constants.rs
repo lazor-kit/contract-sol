@@ -10,3 +10,5 @@ pub const SMART_WALLET_SEED: &[u8] = b"smart_wallet";
 pub const PASSKEY_SIZE: usize = 33; // Secp256r1 compressed pubkey size
 
 pub const AUTHORITY_SEED: &[u8] = b"authority";
+
+pub const SOL_TRANSFER_DISCRIMINATOR: [u8; 4] = [2, 0, 0, 0];

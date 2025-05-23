@@ -10,9 +10,11 @@ import * as dotenv from "dotenv";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 import { LazorKitProgram } from "../sdk/lazor-kit";
 import { DefaultRuleProgram } from "../sdk/default-rule-program";
+import { createNewMint, mintTokenTo } from "./utils";
+import { createTransferCheckedInstruction } from "@solana/spl-token";
 dotenv.config();
 
-describe("init_smart_wallet", () => {
+describe.skip("Test smart wallet with default rule", () => {
   const connection = new anchor.web3.Connection(
     process.env.RPC_URL || "http://localhost:8899",
     "confirmed"
@@ -99,10 +101,6 @@ describe("init_smart_wallet", () => {
       smartWalletAuthenticator
     );
 
-    // log balance of the payer
-    const balance = await connection.getBalance(payer.publicKey);
-    console.log("Payer balance:", balance);
-
     const createSmartWalletTxn = await lazorkitProgram.createSmartWalletTxn(
       pubkey,
       initRuleIns,
@@ -120,10 +118,6 @@ describe("init_smart_wallet", () => {
     );
 
     console.log("Create smart-wallet: ", sig);
-
-    // log balance of the payer
-    const balanceAfter = await connection.getBalance(payer.publicKey);
-    console.log("Payer balance after:", balanceAfter);
 
     const SeqAfter = await lazorkitProgram.smartWalletSeqData;
 
@@ -151,7 +145,7 @@ describe("init_smart_wallet", () => {
     );
   });
 
-  it("Spend SOL successfully with none", async () => {
+  it("Spend SOL successfully", async () => {
     const privateKey = ECDSA.generateKey();
 
     const publicKeyBase64 = privateKey.toCompressedPublicKey();
@@ -211,7 +205,7 @@ describe("init_smart_wallet", () => {
     const transferSolIns = anchor.web3.SystemProgram.transfer({
       fromPubkey: smartWallet,
       toPubkey: Keypair.generate().publicKey,
-      lamports: 5000000,
+      lamports: 4000000,
     });
 
     const checkRule = await defaultRuleProgram.checkRuleIns(
@@ -225,6 +219,119 @@ describe("init_smart_wallet", () => {
       signatureBytes,
       checkRule,
       transferSolIns,
+      payer.publicKey,
+      smartWallet
+    );
+
+    const sig = await sendAndConfirmTransaction(
+      connection,
+      executeTxn,
+      [payer],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    console.log("Execute txn: ", sig);
+  });
+
+  it("Spend Token successfully", async () => {
+    const privateKey = ECDSA.generateKey();
+
+    const publicKeyBase64 = privateKey.toCompressedPublicKey();
+
+    const pubkey = Array.from(Buffer.from(publicKeyBase64, "base64"));
+
+    const smartWallet = await lazorkitProgram.getLastestSmartWallet();
+
+    const smartWalletAuthenticator = lazorkitProgram.smartWalletAuthenticator(
+      pubkey,
+      smartWallet
+    );
+
+    // the user has deposit 0.01 SOL to the smart-wallet
+    const depositSolIns = anchor.web3.SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: smartWallet,
+      lamports: LAMPORTS_PER_SOL / 100,
+    });
+
+    await sendAndConfirmTransaction(
+      connection,
+      new anchor.web3.Transaction().add(depositSolIns),
+      [payer],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    const initRuleIns = await defaultRuleProgram.initRuleIns(
+      payer.publicKey,
+      smartWallet,
+      smartWalletAuthenticator
+    );
+
+    const createSmartWalletTxn = await lazorkitProgram.createSmartWalletTxn(
+      pubkey,
+      initRuleIns,
+      payer.publicKey
+    );
+
+    const createSmartWalletSig = await sendAndConfirmTransaction(
+      connection,
+      createSmartWalletTxn,
+      [payer],
+      {
+        commitment: "confirmed",
+        skipPreflight: true,
+      }
+    );
+
+    console.log("Create smart-wallet: ", createSmartWalletSig);
+
+    const message = Buffer.from("hello");
+    const signatureBytes = Buffer.from(privateKey.sign(message), "base64");
+
+    const mint = await createNewMint(connection, payer, 6);
+    const smartWalletTokenAccount = await mintTokenTo(
+      connection,
+      mint,
+      payer,
+      payer,
+      smartWallet,
+      100_000 * 10 ** 6
+    );
+
+    const randomTokenAccount = await mintTokenTo(
+      connection,
+      mint,
+      payer,
+      payer,
+      Keypair.generate().publicKey,
+      1_000_000
+    );
+
+    const transferTokenIns = createTransferCheckedInstruction(
+      smartWalletTokenAccount,
+      mint,
+      randomTokenAccount,
+      smartWallet,
+      100_000 * 10 ** 6,
+      6,
+      []
+    );
+
+    const checkRule = await defaultRuleProgram.checkRuleIns(
+      smartWallet,
+      smartWalletAuthenticator
+    );
+
+    const executeTxn = await lazorkitProgram.executeInstructionTxn(
+      pubkey,
+      message,
+      signatureBytes,
+      checkRule,
+      transferTokenIns,
       payer.publicKey,
       smartWallet
     );

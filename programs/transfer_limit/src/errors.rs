@@ -17,4 +17,6 @@ pub enum TransferLimitError {
     InvalidRuleAccount,
 
     InvalidAccountInput,
+
+    UnAuthorize,
 }

@@ -6,7 +6,7 @@ use lazorkit::{
     utils::PasskeyExt,
 };
 
-use crate::state::*;
+use crate::{errors::TransferLimitError, state::*, ID};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitRuleArgs {
@@ -17,10 +17,6 @@ pub struct InitRuleArgs {
 }
 
 pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
-    // let smart_wallet_config = &mut ctx.accounts.smart_wallet_config;
-
-    // smart_wallet_config.rule_program = Some(ID);
-
     let rule_data = &mut ctx.accounts.rule_data;
     rule_data.set_inner(RuleData {
         token: args.token,
@@ -47,6 +43,14 @@ pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
 pub struct InitRule<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    pub lazorkit_authority: Signer<'info>,
+
+    #[account(
+        owner = ID,
+        constraint = lazorkit_authority.key() == config.authority @ TransferLimitError::UnAuthorize,
+    )]
+    pub config: Account<'info, Config>,
 
     #[account(
         seeds = [SMART_WALLET_SEED, smart_wallet_config.id.to_le_bytes().as_ref()],
@@ -75,7 +79,6 @@ pub struct InitRule<'info> {
     pub rule_data: Box<Account<'info, RuleData>>,
 
     #[account(
-        mut,
         seeds  = [SmartWalletConfig::PREFIX_SEED, smart_wallet.key().as_ref()],
         bump,
         seeds::program = lazorkit.key(), // LazorKit ID

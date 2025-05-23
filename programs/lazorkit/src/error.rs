@@ -24,4 +24,7 @@ pub enum LazorKitError {
     InvalidAccountInput,
 
     InsufficientFunds,
+
+    #[msg("Invalid rule instruction provided")]
+    InvalidRuleInstruction,
 }

@@ -6,17 +6,15 @@ import { createSecp256r1Instruction, hashSeeds } from "./utils";
 import * as types from "./types";
 
 export class LazorKitProgram {
-  private connection: anchor.web3.Connection;
-  private Idl: anchor.Idl = IDL as Lazorkit;
+  readonly connection: anchor.web3.Connection;
+  readonly Idl: anchor.Idl = IDL as Lazorkit;
 
   constructor(connection: anchor.web3.Connection) {
     this.connection = connection;
   }
 
   get program(): anchor.Program<Lazorkit> {
-    return new anchor.Program(this.Idl, {
-      connection: this.connection,
-    });
+    return new anchor.Program(this.Idl, { connection: this.connection });
   }
 
   get programId(): anchor.web3.PublicKey {
@@ -25,15 +23,13 @@ export class LazorKitProgram {
 
   get smartWalletSeq(): anchor.web3.PublicKey {
     return anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from(constants.SMART_WALLET_SEQ_SEED)],
+      [constants.SMART_WALLET_SEQ_SEED],
       this.programId
     )[0];
   }
 
   get smartWalletSeqData(): Promise<types.SmartWalletSeq> {
-    return Promise.resolve(
-      this.program.account.smartWalletSeq.fetch(this.smartWalletSeq)
-    );
+    return this.program.account.smartWalletSeq.fetch(this.smartWalletSeq);
   }
 
   get authority(): anchor.web3.PublicKey {
@@ -44,15 +40,11 @@ export class LazorKitProgram {
   }
 
   async getLastestSmartWallet(): Promise<anchor.web3.PublicKey> {
-    const smartWalletSeqData = await this.program.account.smartWalletSeq.fetch(
+    const seqData = await this.program.account.smartWalletSeq.fetch(
       this.smartWalletSeq
     );
-
     return anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from(constants.SMART_WALLET_SEED),
-        smartWalletSeqData.seq.toArrayLike(Buffer, "le", 8),
-      ],
+      [constants.SMART_WALLET_SEED, seqData.seq.toArrayLike(Buffer, "le", 8)],
       this.programId
     )[0];
   }
@@ -109,20 +101,34 @@ export class LazorKitProgram {
     payer: anchor.web3.PublicKey,
     defaultRuleProgram: anchor.web3.PublicKey
   ): Promise<anchor.web3.Transaction> {
-    return new anchor.web3.Transaction().add(
-      await this.program.methods
-        .initialize()
-        .accountsPartial({
-          signer: payer,
-          config: this.config,
-          whitelistRulePrograms: this.whitelistRulePrograms,
-          smartWalletSeq: this.smartWalletSeq,
-          authority: this.authority,
-          defaultRuleProgram,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .instruction()
-    );
+    const ix = await this.program.methods
+      .initialize()
+      .accountsPartial({
+        signer: payer,
+        config: this.config,
+        whitelistRulePrograms: this.whitelistRulePrograms,
+        smartWalletSeq: this.smartWalletSeq,
+        authority: this.authority,
+        defaultRuleProgram,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .instruction();
+    return new anchor.web3.Transaction().add(ix);
+  }
+
+  async upsertWhitelistRuleProgramsTxn(
+    payer: anchor.web3.PublicKey,
+    ruleProgram: anchor.web3.PublicKey
+  ): Promise<anchor.web3.Transaction> {
+    const ix = await this.program.methods
+      .upsertWhitelistRulePrograms(ruleProgram)
+      .accountsPartial({
+        signer: payer,
+        whitelistRulePrograms: this.whitelistRulePrograms,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .instruction();
+    return new anchor.web3.Transaction().add(ix);
   }
 
   async createSmartWalletTxn(
@@ -131,32 +137,27 @@ export class LazorKitProgram {
     payer: anchor.web3.PublicKey
   ): Promise<anchor.web3.Transaction> {
     const configData = await this.program.account.config.fetch(this.config);
-
     const smartWallet = await this.getLastestSmartWallet();
-
     const smartWalletAuthenticator = this.smartWalletAuthenticator(
       passkeyPubkey,
       smartWallet
     );
 
-    const remainingAccounts = ruleIns.keys.map((account) => {
-      return {
-        pubkey: account.pubkey,
-        isSigner:
-          account.pubkey.toString() === this.authority.toString()
-            ? false
-            : account.isSigner,
-        isWritable: account.isWritable,
-      };
-    });
+    const remainingAccounts = ruleIns.keys.map((account) => ({
+      pubkey: account.pubkey,
+      isSigner: account.pubkey.equals(this.authority)
+        ? false
+        : account.isSigner,
+      isWritable: account.isWritable,
+    }));
 
-    const createSmartWalletIns = await this.program.methods
+    const createSmartWalletIx = await this.program.methods
       .createSmartWallet(passkeyPubkey, ruleIns.data)
       .accountsPartial({
         signer: payer,
         smartWalletSeq: this.smartWalletSeq,
         whitelistRulePrograms: this.whitelistRulePrograms,
-        smartWallet: await this.getLastestSmartWallet(),
+        smartWallet,
         smartWalletConfig: this.smartWalletConfig(smartWallet),
         smartWalletAuthenticator,
         config: this.config,
@@ -166,80 +167,71 @@ export class LazorKitProgram {
       .remainingAccounts(remainingAccounts)
       .instruction();
 
-    const transaction = new anchor.web3.Transaction().add(createSmartWalletIns);
-    transaction.feePayer = payer;
-    transaction.recentBlockhash = (
-      await this.connection.getLatestBlockhash()
-    ).blockhash;
-
-    return transaction;
+    const tx = new anchor.web3.Transaction().add(createSmartWalletIx);
+    tx.feePayer = payer;
+    tx.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+    return tx;
   }
 
   async executeInstructionTxn(
     passkeyPubkey: number[],
     message: Buffer,
     signature: Buffer,
-    checkRuleIns: anchor.web3.TransactionInstruction,
+    authenticationIns: anchor.web3.TransactionInstruction,
     cpiIns: anchor.web3.TransactionInstruction,
     payer: anchor.web3.PublicKey,
     smartWallet: anchor.web3.PublicKey,
-    verifyInstructionIndex?: number
-  ) {
-    let remainingAccounts: anchor.web3.AccountMeta[] = [];
+    executeAction: anchor.IdlTypes<Lazorkit>["action"] = types.ExecuteAction
+      .ExecuteCpi,
+    verifyInstructionIndex: number = 0
+  ): Promise<anchor.web3.Transaction> {
     const smartWalletAuthenticator = this.smartWalletAuthenticator(
       passkeyPubkey,
       smartWallet
     );
 
-    const checkRuleData: types.CpiData = {
-      data: checkRuleIns.data,
+    const authenticationData: types.CpiData = {
+      data: authenticationIns.data,
       startIndex: 0,
-      length: checkRuleIns.keys.length,
+      length: authenticationIns.keys.length,
     };
-
-    remainingAccounts.push(
-      ...cpiIns.keys.map((key) => {
-        return {
-          pubkey: key.pubkey,
-          isWritable: key.isWritable,
-          isSigner:
-            key.pubkey === smartWalletAuthenticator ? false : key.isSigner,
-        };
-      })
-    );
 
     const cpiData: types.CpiData = {
       data: cpiIns.data,
-      startIndex: checkRuleIns.keys.length,
+      startIndex: authenticationIns.keys.length,
       length: cpiIns.keys.length,
     };
 
-    remainingAccounts.push(
-      ...cpiIns.keys.map((key) => {
-        return {
-          pubkey: key.pubkey,
-          isWritable: key.isWritable,
-          isSigner: key.pubkey === smartWallet ? false : key.isSigner,
-        };
-      })
-    );
+    const remainingAccounts: anchor.web3.AccountMeta[] = [
+      ...authenticationIns.keys.map((key) => ({
+        pubkey: key.pubkey,
+        isWritable: key.isWritable,
+        isSigner: key.pubkey.equals(smartWalletAuthenticator)
+          ? false
+          : key.isSigner,
+      })),
+      ...cpiIns.keys.map((key) => ({
+        pubkey: key.pubkey,
+        isWritable: key.isWritable,
+        isSigner: key.pubkey === payer,
+      })),
+    ];
 
-    const verifySignatureIns = createSecp256r1Instruction(
+    const verifySignatureIx = createSecp256r1Instruction(
       message,
       Buffer.from(passkeyPubkey),
       signature
     );
 
-    const executeInstructionIns = await this.program.methods
+    const executeInstructionIx = await this.program.methods
       .executeInstruction({
         passkeyPubkey,
         signature,
         message,
-        verifyInstructionIndex: verifyInstructionIndex
-          ? verifyInstructionIndex
-          : 0,
-        cpiData: cpiData,
-        ruleData: checkRuleData,
+        verifyInstructionIndex,
+        ruleData: authenticationData,
+        cpiData,
+        action: executeAction,
       })
       .accountsPartial({
         payer,
@@ -248,12 +240,14 @@ export class LazorKitProgram {
         smartWalletAuthenticator,
         whitelistRulePrograms: this.whitelistRulePrograms,
         cpiProgram: cpiIns.programId,
-        ruleProgram: checkRuleIns.programId,
+        authenticatorProgram: authenticationIns.programId,
         ixSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
       .remainingAccounts(remainingAccounts)
       .instruction();
 
-    return new anchor.web3.Transaction().add(verifySignatureIns);
+    return new anchor.web3.Transaction()
+      .add(verifySignatureIx)
+      .add(executeInstructionIx);
   }
 }
