@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{AUTHORITY_SEED, PASSKEY_SIZE, SMART_WALLET_SEED},
+    constants::{PASSKEY_SIZE, SMART_WALLET_SEED},
     state::{
         Config, SmartWalletAuthenticator, SmartWalletConfig, SmartWalletSeq, WhitelistRulePrograms,
     },
@@ -32,8 +32,10 @@ pub fn create_smart_wallet(
     });
 
     let signer = PdaSigner {
-        seeds: AUTHORITY_SEED.to_vec(),
-        bump: ctx.accounts.config.authority_bump,
+        seeds: passkey_pubkey
+            .to_hashed_bytes(ctx.accounts.smart_wallet.key())
+            .to_vec(),
+        bump: ctx.bumps.smart_wallet_authenticator,
     };
 
     execute_cpi(

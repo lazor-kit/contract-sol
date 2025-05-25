@@ -10,7 +10,7 @@ import { ExecuteAction } from "../sdk/types";
 import { TransferLimitProgram } from "../sdk/transfer_limit";
 dotenv.config();
 
-describe("Test smart wallet with default rule", () => {
+describe("Test smart wallet with transfer limit", () => {
   const connection = new anchor.web3.Connection(
     process.env.RPC_URL || "http://localhost:8899",
     "confirmed"
@@ -61,6 +61,7 @@ describe("Test smart wallet with default rule", () => {
     const transferLimitConfigAccountInfo = await connection.getAccountInfo(
       transferLimitProgram.config
     );
+
     if (transferLimitConfigAccountInfo === null) {
       // create the transfer limit program
       const txn = await transferLimitProgram.initializeTxn(
@@ -78,22 +79,22 @@ describe("Test smart wallet with default rule", () => {
         lazorkitProgram.whitelistRulePrograms
       );
 
-    // check if already have transfer limit program
-    if (
-      !whitelistRuleProgramData.list.includes(transferLimitProgram.programId)
-    ) {
-      const txn = await lazorkitProgram.upsertWhitelistRuleProgramsTxn(
-        payer.publicKey,
-        transferLimitProgram.programId
-      );
+    // // check if already have transfer limit program
+    // if (
+    //   !whitelistRuleProgramData.list.includes(transferLimitProgram.programId)
+    // ) {
+    //   const txn = await lazorkitProgram.upsertWhitelistRuleProgramsTxn(
+    //     payer.publicKey,
+    //     transferLimitProgram.programId
+    //   );
 
-      await sendAndConfirmTransaction(connection, txn, [payer], {
-        commitment: "confirmed",
-      });
-    }
+    //   await sendAndConfirmTransaction(connection, txn, [payer], {
+    //     commitment: "confirmed",
+    //   });
+    // }
   });
 
-  it("Initialize successfully", async () => {
+  xit("Change default to transfer limit", async () => {
     const privateKey = ECDSA.generateKey();
 
     const publicKeyBase64 = privateKey.toCompressedPublicKey();
@@ -104,7 +105,7 @@ describe("Test smart wallet with default rule", () => {
 
     const smartWalletConfig = lazorkitProgram.smartWalletConfig(smartWallet);
 
-    const smartWalletAuthenticator = lazorkitProgram.smartWalletAuthenticator(
+    const [smartWalletAuthenticator] = lazorkitProgram.smartWalletAuthenticator(
       pubkey,
       smartWallet
     );
@@ -172,8 +173,6 @@ describe("Test smart wallet with default rule", () => {
     const message = Buffer.from("hello");
     const signatureBytes = Buffer.from(privateKey.sign(message), "base64");
 
-    console.log(lazorkitProgram.authority.toBase58());
-
     const executeTxn = await lazorkitProgram.executeInstructionTxn(
       pubkey,
       message,
@@ -182,7 +181,7 @@ describe("Test smart wallet with default rule", () => {
       initTransferLimitRule,
       payer.publicKey,
       smartWallet,
-      ExecuteAction.ChangeRule
+      ExecuteAction.ChangeProgramRule
     );
 
     const sig2 = await sendAndConfirmTransaction(
@@ -195,5 +194,148 @@ describe("Test smart wallet with default rule", () => {
       }
     );
     console.log("Execute instruction: ", sig2);
+  });
+
+  it("Change default to transfer limit and add member", async () => {
+    const privateKey = ECDSA.generateKey();
+
+    const publicKeyBase64 = privateKey.toCompressedPublicKey();
+
+    const pubkey = Array.from(Buffer.from(publicKeyBase64, "base64"));
+
+    const smartWallet = await lazorkitProgram.getLastestSmartWallet();
+
+    const smartWalletConfig = lazorkitProgram.smartWalletConfig(smartWallet);
+
+    const [smartWalletAuthenticator] = lazorkitProgram.smartWalletAuthenticator(
+      pubkey,
+      smartWallet
+    );
+
+    // the user has deposit 0.01 SOL to the smart-wallet
+    const depositSolIns = anchor.web3.SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: smartWallet,
+      lamports: LAMPORTS_PER_SOL / 100,
+    });
+
+    await sendAndConfirmTransaction(
+      connection,
+      new anchor.web3.Transaction().add(depositSolIns),
+      [payer],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    const initRuleIns = await defaultRuleProgram.initRuleIns(
+      payer.publicKey,
+      smartWallet,
+      smartWalletAuthenticator
+    );
+
+    const createSmartWalletTxn = await lazorkitProgram.createSmartWalletTxn(
+      pubkey,
+      initRuleIns,
+      payer.publicKey
+    );
+
+    const sig = await sendAndConfirmTransaction(
+      connection,
+      createSmartWalletTxn,
+      [payer],
+      {
+        commitment: "confirmed",
+        skipPreflight: true,
+      }
+    );
+
+    console.log("Create smart-wallet: ", sig);
+
+    // Change rule
+    const destroyRuleDefaultIns = await defaultRuleProgram.destroyIns(
+      payer.publicKey,
+      smartWallet,
+      smartWalletAuthenticator
+    );
+
+    const initTransferLimitRule = await transferLimitProgram.initRuleIns(
+      payer.publicKey,
+      smartWallet,
+      smartWalletAuthenticator,
+      smartWalletConfig,
+      {
+        passkeyPubkey: pubkey,
+        token: anchor.web3.PublicKey.default,
+        limitAmount: new anchor.BN(100),
+        limitPeriod: new anchor.BN(1000),
+      }
+    );
+
+    const message = Buffer.from("hello");
+    const signatureBytes = Buffer.from(privateKey.sign(message), "base64");
+
+    const executeTxn = await lazorkitProgram.executeInstructionTxn(
+      pubkey,
+      message,
+      signatureBytes,
+      destroyRuleDefaultIns,
+      initTransferLimitRule,
+      payer.publicKey,
+      smartWallet,
+      ExecuteAction.ChangeProgramRule
+    );
+
+    const sig2 = await sendAndConfirmTransaction(
+      connection,
+      executeTxn,
+      [payer],
+      {
+        commitment: "confirmed",
+        skipPreflight: true,
+      }
+    );
+    console.log("Change rule instruction: ", sig2);
+
+    const newPasskeyPubkey = ECDSA.generateKey().toCompressedPublicKey();
+    const [newSmartWalletAuthenticator, bump] =
+      lazorkitProgram.smartWalletAuthenticator(
+        Array.from(Buffer.from(newPasskeyPubkey, "base64")),
+        smartWallet
+      );
+
+    const addMemberIns = await transferLimitProgram.addMemeberIns(
+      payer.publicKey,
+      smartWallet,
+      smartWalletAuthenticator,
+      newSmartWalletAuthenticator,
+      lazorkitProgram.programId,
+      Array.from(Buffer.from(newPasskeyPubkey, "base64")),
+      bump
+    );
+
+    const addMemberTxn = await lazorkitProgram.executeInstructionTxn(
+      pubkey,
+      message,
+      signatureBytes,
+      addMemberIns,
+      null,
+      payer.publicKey,
+      smartWallet,
+      ExecuteAction.CallRuleProgram,
+      newPasskeyPubkey
+    );
+
+    const addMemberSig = await sendAndConfirmTransaction(
+      connection,
+      addMemberTxn,
+      [payer],
+      {
+        commitment: "confirmed",
+        skipPreflight: true,
+      }
+    );
+
+    console.log("Add member: ", addMemberSig);
   });
 });

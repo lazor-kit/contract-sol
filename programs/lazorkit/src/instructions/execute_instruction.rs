@@ -1,26 +1,29 @@
 use anchor_lang::{prelude::*, solana_program::sysvar::instructions::load_instruction_at_checked};
 
-use crate::constants::AUTHORITY_SEED;
 use crate::state::Config;
-use crate::utils::execute_cpi;
+use crate::utils::{
+    check_whitelist, execute_cpi, get_pda_signer, sighash, transfer_sol_from_pda,
+    verify_secp256r1_instruction, PasskeyExt, PdaSigner,
+};
 use crate::{
     constants::{SMART_WALLET_SEED, SOL_TRANSFER_DISCRIMINATOR},
     error::LazorKitError,
     state::{SmartWalletAuthenticator, SmartWalletConfig, WhitelistRulePrograms},
-    utils::{sighash, transfer_sol_from_pda, verify_secp256r1_instruction, PasskeyExt, PdaSigner},
     ID,
 };
 use anchor_lang::solana_program::sysvar::instructions::ID as IX_ID;
 
+/// Enum for supported actions in the instruction
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
 pub enum Action {
     #[default]
     ExecuteCpi,
-    ChangeRule,
+    ChangeProgramRule,
     CheckAuthenticator,
-    UpdateRule,
+    CallRuleProgram,
 }
 
+/// Arguments for the execute_instruction entrypoint
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ExecuteInstructionArgs {
     pub passkey_pubkey: [u8; 33],
@@ -30,8 +33,10 @@ pub struct ExecuteInstructionArgs {
     pub rule_data: CpiData,
     pub cpi_data: Option<CpiData>,
     pub action: Action,
+    pub create_new_authenticator: Option<[u8; 33]>,
 }
 
+/// Data for a CPI call (instruction data and account slice)
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct CpiData {
     pub data: Vec<u8>,
@@ -39,90 +44,75 @@ pub struct CpiData {
     pub length: u8,      // number of accounts to take from remaining accounts
 }
 
+/// Entrypoint for executing smart wallet instructions
 pub fn execute_instruction(
     ctx: Context<ExecuteInstruction>,
     args: ExecuteInstructionArgs,
 ) -> Result<()> {
-    let smart_wallet_auth = &ctx.accounts.smart_wallet_authenticator;
+    // --- Account references ---
+    let authenticator = &ctx.accounts.smart_wallet_authenticator;
     let payer = &ctx.accounts.payer;
-    let lazor_config = &ctx.accounts.config;
+    let config = &ctx.accounts.config;
     let payer_balance_before = payer.lamports();
 
-    // Verify passkey and smart wallet association
+    // --- Passkey and wallet validation ---
     require!(
-        smart_wallet_auth.passkey_pubkey == args.passkey_pubkey
-            && smart_wallet_auth.smart_wallet == ctx.accounts.smart_wallet.key(),
+        authenticator.passkey_pubkey == args.passkey_pubkey
+            && authenticator.smart_wallet == ctx.accounts.smart_wallet.key(),
         LazorKitError::InvalidPasskey
     );
 
-    // Load and verify the Secp256r1 instruction
+    // --- Signature verification using secp256r1 ---
     let secp_ix = load_instruction_at_checked(
         args.verify_instruction_index as usize,
         &ctx.accounts.ix_sysvar,
     )?;
-
     verify_secp256r1_instruction(
         &secp_ix,
-        smart_wallet_auth.passkey_pubkey,
+        authenticator.passkey_pubkey,
         args.message,
         args.signature,
     )?;
 
+    // --- Action dispatch ---
     match args.action {
         Action::ExecuteCpi => {
-            // Check if the authenticator program is whitelisted
-            let authenticator_program_key: Pubkey = ctx.accounts.authenticator_program.key();
-            let whitelist = &ctx.accounts.whitelist_rule_programs;
-            require!(
-                whitelist.list.contains(&authenticator_program_key),
-                LazorKitError::InvalidRuleProgram
+            // --- Rule program whitelist check ---
+            let rule_program_key = ctx.accounts.authenticator_program.key();
+            check_whitelist(&ctx.accounts.whitelist_rule_programs, &rule_program_key)?;
+
+            // --- Prepare PDA signer for rule CPI ---
+            let rule_signer = get_pda_signer(
+                &args.passkey_pubkey,
+                ctx.accounts.smart_wallet.key(),
+                ctx.bumps.smart_wallet_authenticator,
             );
+            let rule_accounts = &ctx.remaining_accounts[args.rule_data.start_index as usize
+                ..(args.rule_data.start_index as usize + args.rule_data.length as usize)];
 
-            // Prepare PDA signer for rule CPI
-            let auth_signer = PdaSigner {
-                seeds: args
-                    .passkey_pubkey
-                    .to_hashed_bytes(ctx.accounts.smart_wallet.key())
-                    .to_vec(),
-                bump: ctx.bumps.smart_wallet_authenticator,
-            };
-
-            // Slice rule accounts from remaining_accounts
-            let rule_accounts = ctx
-                .remaining_accounts
-                .get(
-                    args.rule_data.start_index as usize
-                        ..(args.rule_data.start_index as usize + args.rule_data.length as usize),
-                )
-                .ok_or(LazorKitError::InvalidAccountInput)?;
-
+            // --- Rule instruction discriminator check ---
             require!(
                 args.rule_data.data.get(0..8) == Some(&sighash("global", "check_rule")),
                 LazorKitError::InvalidRuleInstruction
             );
 
+            // --- Execute rule CPI ---
             execute_cpi(
                 rule_accounts,
-                args.rule_data.data,
+                args.rule_data.data.clone(),
                 &ctx.accounts.authenticator_program,
-                Some(auth_signer),
+                Some(rule_signer),
             )?;
 
+            // --- CPI for main instruction ---
             let cpi_data = args
                 .cpi_data
                 .as_ref()
                 .ok_or(LazorKitError::InvalidAccountInput)?;
+            let cpi_accounts = &ctx.remaining_accounts[cpi_data.start_index as usize
+                ..(cpi_data.start_index as usize + cpi_data.length as usize)];
 
-            // Slice CPI accounts from remaining_accounts
-            let cpi_accounts = ctx
-                .remaining_accounts
-                .get(
-                    cpi_data.start_index as usize
-                        ..(cpi_data.start_index as usize + cpi_data.length as usize),
-                )
-                .ok_or(LazorKitError::InvalidAccountInput)?;
-
-            // Handle SOL transfer or generic CPI
+            // --- Special handling for SOL transfer ---
             if cpi_data.data.get(0..4) == Some(&SOL_TRANSFER_DISCRIMINATOR)
                 && ctx.accounts.cpi_program.key() == anchor_lang::solana_program::system_program::ID
             {
@@ -131,17 +121,17 @@ pub fn execute_instruction(
                     LazorKitError::InvalidAccountInput
                 );
                 let amount = u64::from_le_bytes(cpi_data.data[4..12].try_into().unwrap());
-
                 transfer_sol_from_pda(
                     &ctx.accounts.smart_wallet,
                     &ctx.remaining_accounts[1].to_account_info(),
                     amount,
                 )?;
             } else {
-                let wallet_data = &ctx.accounts.smart_wallet_config;
+                // --- Generic CPI with wallet signer ---
+                let wallet = &ctx.accounts.smart_wallet_config;
                 let wallet_signer = PdaSigner {
-                    seeds: [SMART_WALLET_SEED, wallet_data.id.to_le_bytes().as_ref()].concat(),
-                    bump: wallet_data.bump,
+                    seeds: [SMART_WALLET_SEED, wallet.id.to_le_bytes().as_ref()].concat(),
+                    bump: wallet.bump,
                 };
                 execute_cpi(
                     cpi_accounts,
@@ -151,102 +141,107 @@ pub fn execute_instruction(
                 )?;
             }
         }
-        Action::ChangeRule => {
-            // Change rule logic can be implemented here
-            let authenticator_program_key: Pubkey = ctx.accounts.authenticator_program.key();
-            let init_rule_program_key: Pubkey = ctx.accounts.cpi_program.key();
+        Action::ChangeProgramRule => {
+            // --- Change rule program logic ---
+            let old_rule_program_key = ctx.accounts.authenticator_program.key();
+            let new_rule_program_key = ctx.accounts.cpi_program.key();
             let whitelist = &ctx.accounts.whitelist_rule_programs;
-            let smart_wallet_config = &mut ctx.accounts.smart_wallet_config;
-            let init_rule_data = args
-                .cpi_data
-                .as_ref()
-                .ok_or(LazorKitError::InvalidAccountInput)?;
-
-            require!(
-                whitelist.list.contains(&authenticator_program_key),
-                LazorKitError::InvalidRuleProgram
-            );
-
-            require!(
-                whitelist.list.contains(&init_rule_program_key),
-                LazorKitError::InvalidRuleProgram
-            );
-
-            require!(
-                args.rule_data.data.get(0..8) == Some(&sighash("global", "destroy")),
-                LazorKitError::InvalidRuleInstruction
-            );
-
-            require!(
-                init_rule_data.data.get(0..8) == Some(&sighash("global", "init_rule")),
-                LazorKitError::InvalidRuleInstruction
-            );
-
-            // check that one of the two must be equal default program key and not equal.
-            let default_rule_program_key = lazor_config.default_rule_program;
-            require!(
-                (authenticator_program_key == default_rule_program_key
-                    || init_rule_program_key == default_rule_program_key)
-                    && (authenticator_program_key != init_rule_program_key),
-                LazorKitError::InvalidRuleProgram
-            );
-
-            smart_wallet_config.rule_program = init_rule_program_key;
-
-            // Prepare PDA signer for rule CPI
-            let auth_signer = PdaSigner {
-                seeds: args
-                    .passkey_pubkey
-                    .to_hashed_bytes(ctx.accounts.smart_wallet.key())
-                    .to_vec(),
-                bump: ctx.bumps.smart_wallet_authenticator,
-            };
-
-            // Slice rule accounts from remaining_accounts
-            let rule_accounts = ctx
-                .remaining_accounts
-                .get(
-                    args.rule_data.start_index as usize
-                        ..(args.rule_data.start_index as usize + args.rule_data.length as usize),
-                )
-                .ok_or(LazorKitError::InvalidAccountInput)?;
-
-            execute_cpi(
-                rule_accounts,
-                args.rule_data.data,
-                &ctx.accounts.authenticator_program,
-                Some(auth_signer),
-            )?;
-
+            let wallet_config = &mut ctx.accounts.smart_wallet_config;
             let cpi_data = args
                 .cpi_data
                 .as_ref()
                 .ok_or(LazorKitError::InvalidAccountInput)?;
-            // Slice CPI accounts from remaining_accounts
-            let cpi_accounts = ctx
-                .remaining_accounts
-                .get(
-                    cpi_data.start_index as usize
-                        ..(cpi_data.start_index as usize + cpi_data.length as usize),
-                )
-                .ok_or(LazorKitError::InvalidAccountInput)?;
 
-            let wallet_signer = PdaSigner {
-                seeds: AUTHORITY_SEED.to_vec(),
-                bump: lazor_config.authority_bump,
-            };
+            check_whitelist(whitelist, &old_rule_program_key)?;
+            check_whitelist(whitelist, &new_rule_program_key)?;
+
+            // --- Destroy/init discriminators check ---
+            require!(
+                args.rule_data.data.get(0..8) == Some(&sighash("global", "destroy")),
+                LazorKitError::InvalidRuleInstruction
+            );
+            require!(
+                cpi_data.data.get(0..8) == Some(&sighash("global", "init_rule")),
+                LazorKitError::InvalidRuleInstruction
+            );
+
+            // --- Only one of the programs can be the default, and they must differ ---
+            let default_rule_program = config.default_rule_program;
+            require!(
+                (old_rule_program_key == default_rule_program
+                    || new_rule_program_key == default_rule_program)
+                    && (old_rule_program_key != new_rule_program_key),
+                LazorKitError::InvalidRuleProgram
+            );
+
+            // --- Update rule program in config ---
+            wallet_config.rule_program = new_rule_program_key;
+
+            // --- Destroy old rule program ---
+            let rule_signer = get_pda_signer(
+                &args.passkey_pubkey,
+                ctx.accounts.smart_wallet.key(),
+                ctx.bumps.smart_wallet_authenticator,
+            );
+            let rule_accounts = &ctx.remaining_accounts[args.rule_data.start_index as usize
+                ..(args.rule_data.start_index as usize + args.rule_data.length as usize)];
+
+            execute_cpi(
+                rule_accounts,
+                args.rule_data.data.clone(),
+                &ctx.accounts.authenticator_program,
+                Some(rule_signer.clone()),
+            )?;
+
+            // --- Init new rule program ---
+            let cpi_accounts = &ctx.remaining_accounts[cpi_data.start_index as usize
+                ..(cpi_data.start_index as usize + cpi_data.length as usize)];
             execute_cpi(
                 cpi_accounts,
                 cpi_data.data.clone(),
                 &ctx.accounts.cpi_program,
-                Some(wallet_signer),
+                Some(rule_signer.clone()),
             )?;
         }
-        Action::UpdateRule => {}
-        Action::CheckAuthenticator => {}
+        Action::CallRuleProgram => {
+            // --- Call rule program logic ---
+            let rule_program_key = ctx.accounts.authenticator_program.key();
+            check_whitelist(&ctx.accounts.whitelist_rule_programs, &rule_program_key)?;
+
+            let rule_signer = get_pda_signer(
+                &args.passkey_pubkey,
+                ctx.accounts.smart_wallet.key(),
+                ctx.bumps.smart_wallet_authenticator,
+            );
+            let rule_accounts = &ctx.remaining_accounts[args.rule_data.start_index as usize
+                ..(args.rule_data.start_index as usize + args.rule_data.length as usize)];
+            execute_cpi(
+                rule_accounts,
+                args.rule_data.data.clone(),
+                &ctx.accounts.authenticator_program,
+                Some(rule_signer),
+            )?;
+
+            // --- Optionally create a new smart wallet authenticator ---
+            if let Some(new_authenticator) = args.create_new_authenticator {
+                let new_auth = ctx
+                    .accounts
+                    .new_smart_wallet_authenticator
+                    .as_mut()
+                    .unwrap();
+                new_auth.smart_wallet = ctx.accounts.smart_wallet.key();
+                new_auth.passkey_pubkey = new_authenticator;
+                new_auth.bump = ctx.bumps.new_smart_wallet_authenticator.unwrap_or_default();
+            } else {
+                return Err(LazorKitError::InvalidAccountInput.into());
+            }
+        }
+        Action::CheckAuthenticator => {
+            // --- No-op: used for checking authenticator existence ---
+        }
     }
 
-    // Reimburse payer if balance changed
+    // --- Reimburse payer if balance changed ---
     let payer_balance_after = payer.lamports().saturating_sub(10000);
     let reimbursement = payer_balance_before.saturating_sub(payer_balance_after);
     if reimbursement > 0 {
@@ -260,6 +255,7 @@ pub fn execute_instruction(
     Ok(())
 }
 
+/// Accounts context for execute_instruction
 #[derive(Accounts)]
 #[instruction(args: ExecuteInstructionArgs)]
 pub struct ExecuteInstruction<'info> {
@@ -288,13 +284,23 @@ pub struct ExecuteInstruction<'info> {
         bump,
         owner = ID,
     )]
-    pub smart_wallet_config: Account<'info, SmartWalletConfig>,
+    pub smart_wallet_config: Box<Account<'info, SmartWalletConfig>>,
 
     #[account(
         seeds = [args.passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],
         bump,
+        owner = ID,
     )]
-    pub smart_wallet_authenticator: Account<'info, SmartWalletAuthenticator>,
+    pub smart_wallet_authenticator: Box<Account<'info, SmartWalletAuthenticator>>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + SmartWalletAuthenticator::INIT_SPACE,
+        seeds = [SmartWalletAuthenticator::PREFIX_SEED, smart_wallet.key().as_ref(), args.create_new_authenticator.unwrap_or([0; 33]).as_ref()],
+        bump,
+    )]
+    pub new_smart_wallet_authenticator: Option<Box<Account<'info, SmartWalletAuthenticator>>>,
 
     #[account(
         seeds = [WhitelistRulePrograms::PREFIX_SEED],
@@ -312,4 +318,6 @@ pub struct ExecuteInstruction<'info> {
     #[account(address = IX_ID)]
     /// CHECK: Sysvar for instructions.
     pub ix_sysvar: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
 }

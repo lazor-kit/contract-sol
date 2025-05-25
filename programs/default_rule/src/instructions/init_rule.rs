@@ -1,6 +1,4 @@
-use crate::error::RuleError;
-use crate::state::{Config, Rule};
-use crate::ID;
+use crate::state::Rule;
 use anchor_lang::prelude::*;
 use lazorkit::program::Lazorkit;
 
@@ -19,19 +17,11 @@ pub struct InitRule<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    pub lazorkit_authority: Signer<'info>,
-
-    #[account(
-        owner = ID,
-        constraint = lazorkit_authority.key() == config.authority @ RuleError::UnAuthorize,
-    )]
-    pub config: Account<'info, Config>,
-
     /// CHECK:
     pub smart_wallet: UncheckedAccount<'info>,
 
     /// CHECK
-    pub smart_wallet_authenticator: UncheckedAccount<'info>,
+    pub smart_wallet_authenticator: Signer<'info>,
 
     #[account(
         init,

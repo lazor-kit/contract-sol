@@ -19,4 +19,6 @@ pub enum TransferLimitError {
     InvalidAccountInput,
 
     UnAuthorize,
+
+    InvalidBump,
 }

@@ -12,7 +12,7 @@ pub struct AddMemberArgs {
     pub member: Pubkey,
 }
 
-pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33]) -> Result<()> {
+pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33], bump: u8) -> Result<()> {
     let member = &mut ctx.accounts.member;
     let new_smart_wallet_authenticator = &mut ctx.accounts.new_smart_wallet_authenticator;
     let smart_wallet_authenticator = &mut ctx.accounts.smart_wallet_authenticator;
@@ -27,18 +27,14 @@ pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33]) -> Resu
         TransferLimitError::InvalidNewPasskey
     );
 
+    require!(expected_bump == bump, TransferLimitError::InvalidBump);
+
     member.set_inner(Member {
         owner: new_smart_wallet_authenticator.key(),
         member_type: MemberType::Member,
         smart_wallet: smart_wallet_authenticator.smart_wallet,
         bump: expected_bump,
         is_initialized: true,
-    });
-
-    new_smart_wallet_authenticator.set_inner(SmartWalletAuthenticator {
-        passkey_pubkey: new_passkey_pubkey,
-        smart_wallet: smart_wallet_authenticator.smart_wallet,
-        bump: expected_bump,
     });
 
     Ok(())
@@ -50,18 +46,13 @@ pub struct AddMember<'info> {
     pub payer: Signer<'info>,
 
     #[account(
-        owner = lazorkit.key()
+        owner = lazorkit.key(),
+        signer,
     )]
     pub smart_wallet_authenticator: Account<'info, SmartWalletAuthenticator>,
 
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + SmartWalletAuthenticator::INIT_SPACE,
-        owner = lazorkit.key()
-    )]
     /// CHECK:
-    pub new_smart_wallet_authenticator: Box<Account<'info, SmartWalletAuthenticator>>,
+    pub new_smart_wallet_authenticator: UncheckedAccount<'info>,
 
     #[account(
         seeds = [Member::PREFIX_SEED, smart_wallet_authenticator.smart_wallet.key().as_ref(), smart_wallet_authenticator.key().as_ref()],

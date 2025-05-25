@@ -13,9 +13,9 @@ export type SmartWallet = anchor.Idl;
 
 export const ExecuteAction = {
   ["ExecuteCpi"]: { executeCpi: {} },
-  ["ChangeRule"]: { changeRule: {} },
+  ["ChangeProgramRule"]: { changeProgramRule: {} },
   ["CheckAuthenticator"]: { checkAuthenticator: {} },
-  ["UpdateRule"]: { updateRule: {} },
+  ["CallRuleProgram"]: { callRuleProgram: {} },
 };
 
 // TransferLimitType

@@ -21,8 +21,12 @@ pub mod transfer_limit {
         instructions::init_rule(ctx, init_rule_args)
     }
 
-    pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33]) -> Result<()> {
-        instructions::add_member(ctx, new_passkey_pubkey)
+    pub fn add_member(
+        ctx: Context<AddMember>,
+        new_passkey_pubkey: [u8; 33],
+        bump: u8,
+    ) -> Result<()> {
+        instructions::add_member(ctx, new_passkey_pubkey, bump)
     }
 
     pub fn execute_instruction<'c: 'info, 'info>(

@@ -80,13 +80,10 @@ export class TransferLimitProgram {
     smartWalletConfig: anchor.web3.PublicKey,
     args: types.InitRuleArgs
   ) {
-    const configData = await this.program.account.config.fetch(this.config);
     return await this.program.methods
       .initRule(args)
       .accountsPartial({
         payer,
-        lazorkitAuthority: configData.authority,
-        config: this.config,
         smartWallet,
         smartWalletAuthenticator,
         member: this.member(smartWallet, smartWalletAuthenticator),
@@ -97,31 +94,26 @@ export class TransferLimitProgram {
       .instruction();
   }
 
-  //   async checkRuleIns(
-  //     smartWallet: anchor.web3.PublicKey,
-  //     smartWalletAuthenticator: anchor.web3.PublicKey
-  //   ) {
-  //     return await this.program.methods
-  //       .checkRule()
-  //       .accountsPartial({
-  //         rule: this.rule(smartWallet),
-  //         smartWalletAuthenticator,
-  //       })
-  //       .instruction();
-  //   }
-
-  //   async destroyIns(
-  //     payer: anchor.web3.PublicKey,
-  //     smartWallet: anchor.web3.PublicKey,
-  //     smartWalletAuthenticator: anchor.web3.PublicKey
-  //   ) {
-  //     return await this.program.methods
-  //       .destroy()
-  //       .accountsPartial({
-  //         rule: this.rule(smartWallet),
-  //         smartWalletAuthenticator,
-  //         smartWallet,
-  //       })
-  //       .instruction();
-  //   }
+  async addMemeberIns(
+    payer: anchor.web3.PublicKey,
+    smartWallet: anchor.web3.PublicKey,
+    smartWalletAuthenticator: anchor.web3.PublicKey,
+    newSmartWalletAuthenticator: anchor.web3.PublicKey,
+    lazorkit: anchor.web3.PublicKey,
+    new_passkey_pubkey: number[],
+    bump: number
+  ) {
+    return await this.program.methods
+      .addMember(new_passkey_pubkey, bump)
+      .accountsPartial({
+        payer,
+        smartWalletAuthenticator,
+        newSmartWalletAuthenticator,
+        admin: this.member(smartWallet, smartWalletAuthenticator),
+        member: this.member(smartWallet, newSmartWalletAuthenticator),
+        lazorkit,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .instruction();
+  }
 }

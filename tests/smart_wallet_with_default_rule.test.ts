@@ -74,7 +74,7 @@ describe.skip("Test smart wallet with default rule", () => {
 
     const smartWallet = await lazorkitProgram.getLastestSmartWallet();
 
-    const smartWalletAuthenticator = lazorkitProgram.smartWalletAuthenticator(
+    const [smartWalletAuthenticator] = lazorkitProgram.smartWalletAuthenticator(
       pubkey,
       smartWallet
     );
@@ -154,7 +154,7 @@ describe.skip("Test smart wallet with default rule", () => {
 
     const smartWallet = await lazorkitProgram.getLastestSmartWallet();
 
-    const smartWalletAuthenticator = lazorkitProgram.smartWalletAuthenticator(
+    const [smartWalletAuthenticator] = lazorkitProgram.smartWalletAuthenticator(
       pubkey,
       smartWallet
     );
@@ -244,7 +244,7 @@ describe.skip("Test smart wallet with default rule", () => {
 
     const smartWallet = await lazorkitProgram.getLastestSmartWallet();
 
-    const smartWalletAuthenticator = lazorkitProgram.smartWalletAuthenticator(
+    const [smartWalletAuthenticator] = lazorkitProgram.smartWalletAuthenticator(
       pubkey,
       smartWallet
     );

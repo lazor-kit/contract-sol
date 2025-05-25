@@ -20,26 +20,26 @@ pub struct PdaSigner {
     pub bump: u8,
 }
 
+/// Helper to check if a slice matches a pattern
+#[inline]
+pub fn slice_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x == y)
+}
+
 /// Execute a Cross-Program Invocation (CPI) with optional PDA signing
 pub fn execute_cpi(
-    target_accounts: &[AccountInfo],
-    instruction_bytes: Vec<u8>,
-    target_program: &AccountInfo,
-    pda_signer: Option<PdaSigner>,
+    accounts: &[AccountInfo],
+    data: Vec<u8>,
+    program: &AccountInfo,
+    signer: Option<PdaSigner>,
 ) -> Result<()> {
-    let instruction = create_cpi_instruction(
-        target_accounts,
-        instruction_bytes,
-        target_program,
-        &pda_signer,
-    );
-
-    match pda_signer {
-        Some(signer) => {
-            let seeds = [signer.seeds.as_slice(), &[signer.bump]];
-            invoke_signed(&instruction, target_accounts, &[&seeds])
+    let ix = create_cpi_instruction(accounts, data, program, &signer);
+    match signer {
+        Some(s) => {
+            let seeds = [s.seeds.as_slice(), &[s.bump]];
+            invoke_signed(&ix, accounts, &[&seeds])
         }
-        None => invoke(&instruction, target_accounts),
+        None => invoke(&ix, accounts),
     }
     .map_err(Into::into)
 }
@@ -77,22 +77,17 @@ fn create_cpi_instruction(
 
 /// Verify a Secp256r1 signature instruction
 pub fn verify_secp256r1_instruction(
-    instruction: &Instruction,
-    public_key: [u8; SECP_PUBKEY_SIZE as usize],
-    message: Vec<u8>,
-    signature: Vec<u8>,
+    ix: &Instruction,
+    pubkey: [u8; SECP_PUBKEY_SIZE as usize],
+    msg: Vec<u8>,
+    sig: Vec<u8>,
 ) -> Result<()> {
-    // Validate basic requirements
     let expected_len =
-        (SECP_DATA_START + SECP_PUBKEY_SIZE + SECP_SIGNATURE_SIZE) as usize + message.len();
-    if instruction.program_id != SECP256R1_ID
-        || !instruction.accounts.is_empty()
-        || instruction.data.len() != expected_len
-    {
+        (SECP_DATA_START + SECP_PUBKEY_SIZE + SECP_SIGNATURE_SIZE) as usize + msg.len();
+    if ix.program_id != SECP256R1_ID || !ix.accounts.is_empty() || ix.data.len() != expected_len {
         return Err(LazorKitError::InvalidLengthForVerification.into());
     }
-
-    verify_secp256r1_data(&instruction.data, public_key, message, signature)
+    verify_secp256r1_data(&ix.data, pubkey, msg, sig)
 }
 
 /// Verify the data portion of a Secp256r1 signature
@@ -160,16 +155,16 @@ fn verify_secp_data(data: &[u8], public_key: &[u8], signature: &[u8], message: &
 
 /// Extension trait for passkey operations
 pub trait PasskeyExt {
-    fn to_hashed_bytes(&self, smart_wallet: Pubkey) -> [u8; 32];
+    fn to_hashed_bytes(&self, wallet: Pubkey) -> [u8; 32];
 }
 
 impl PasskeyExt for [u8; SECP_PUBKEY_SIZE as usize] {
     #[inline]
-    fn to_hashed_bytes(&self, smart_wallet: Pubkey) -> [u8; 32] {
-        let mut combined_bytes = [0u8; 65];
-        combined_bytes[..SECP_PUBKEY_SIZE as usize].copy_from_slice(self);
-        combined_bytes[SECP_PUBKEY_SIZE as usize..].copy_from_slice(&smart_wallet.to_bytes());
-        hash(&combined_bytes).to_bytes()
+    fn to_hashed_bytes(&self, wallet: Pubkey) -> [u8; 32] {
+        let mut buf = [0u8; 65];
+        buf[..SECP_PUBKEY_SIZE as usize].copy_from_slice(self);
+        buf[SECP_PUBKEY_SIZE as usize..].copy_from_slice(&wallet.to_bytes());
+        hash(&buf).to_bytes()
     }
 }
 
@@ -183,12 +178,43 @@ pub fn transfer_sol_from_pda(from: &AccountInfo, to: &AccountInfo, amount: u64) 
     Ok(())
 }
 
+/// Helper to get sighash for anchor instructions
 pub fn sighash(namespace: &str, name: &str) -> [u8; 8] {
     let preimage = format!("{}:{}", namespace, name);
-
-    let mut sighash = [0u8; 8];
-    sighash.copy_from_slice(
+    let mut out = [0u8; 8];
+    out.copy_from_slice(
         &anchor_lang::solana_program::hash::hash(preimage.as_bytes()).to_bytes()[..8],
     );
-    sighash
+    out
+}
+
+/// Helper: Get a slice of accounts from remaining_accounts
+pub fn get_account_slice<'a>(
+    accounts: &'a [AccountInfo<'a>],
+    start: u8,
+    len: u8,
+) -> Result<&'a [AccountInfo<'a>]> {
+    accounts
+        .get(start as usize..(start as usize + len as usize))
+        .ok_or(crate::error::LazorKitError::InvalidAccountInput.into())
+}
+
+/// Helper: Create a PDA signer struct
+pub fn get_pda_signer(passkey: &[u8; 33], wallet: Pubkey, bump: u8) -> PdaSigner {
+    PdaSigner {
+        seeds: passkey.to_hashed_bytes(wallet).to_vec(),
+        bump,
+    }
+}
+
+/// Helper: Check if a program is in the whitelist
+pub fn check_whitelist(
+    whitelist: &crate::state::WhitelistRulePrograms,
+    program: &Pubkey,
+) -> Result<()> {
+    require!(
+        whitelist.list.contains(program),
+        crate::error::LazorKitError::InvalidRuleProgram
+    );
+    Ok(())
 }

@@ -6,7 +6,7 @@ use lazorkit::{
     utils::PasskeyExt,
 };
 
-use crate::{errors::TransferLimitError, state::*, ID};
+use crate::state::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitRuleArgs {
@@ -43,14 +43,6 @@ pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
 pub struct InitRule<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-
-    pub lazorkit_authority: Signer<'info>,
-
-    #[account(
-        owner = ID,
-        constraint = lazorkit_authority.key() == config.authority @ TransferLimitError::UnAuthorize,
-    )]
-    pub config: Account<'info, Config>,
 
     #[account(
         seeds = [SMART_WALLET_SEED, smart_wallet_config.id.to_le_bytes().as_ref()],
@@ -89,6 +81,7 @@ pub struct InitRule<'info> {
         seeds = [args.passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],
         bump,
         seeds::program = lazorkit.key(), // LazorKit ID
+        signer,
     )]
     pub smart_wallet_authenticator: Account<'info, SmartWalletAuthenticator>,
 

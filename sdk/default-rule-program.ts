@@ -59,8 +59,6 @@ export class DefaultRuleProgram {
       .initRule()
       .accountsPartial({
         payer,
-        lazorkitAuthority: configData.authority,
-        config: this.config,
         smartWallet,
         smartWalletAuthenticator,
         rule: this.rule(smartWallet),
