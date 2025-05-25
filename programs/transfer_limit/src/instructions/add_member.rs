@@ -41,6 +41,7 @@ pub fn add_member(ctx: Context<AddMember>, new_passkey_pubkey: [u8; 33], bump: u
 }
 
 #[derive(Accounts)]
+#[instruction(new_passkey_pubkey: [u8; 33], bump: u8)]
 pub struct AddMember<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -51,6 +52,9 @@ pub struct AddMember<'info> {
     )]
     pub smart_wallet_authenticator: Account<'info, SmartWalletAuthenticator>,
 
+    #[account(
+        owner = lazorkit.key(),
+    )]
     /// CHECK:
     pub new_smart_wallet_authenticator: UncheckedAccount<'info>,
 

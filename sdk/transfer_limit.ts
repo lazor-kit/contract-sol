@@ -116,4 +116,20 @@ export class TransferLimitProgram {
       })
       .instruction();
   }
+
+  async checkRuleIns(
+    smartWallet: anchor.web3.PublicKey,
+    smartWalletAuthenticator: anchor.web3.PublicKey,
+    cpiIns: anchor.web3.TransactionInstruction,
+    tokenMint: anchor.web3.PublicKey = anchor.web3.PublicKey.default
+  ) {
+    return await this.program.methods
+      .checkRule(tokenMint, cpiIns.data, cpiIns.programId)
+      .accountsPartial({
+        smartWalletAuthenticator,
+        ruleData: this.ruleData(smartWallet, tokenMint),
+        member: this.member(smartWallet, smartWalletAuthenticator),
+      })
+      .instruction();
+  }
 }

@@ -52,7 +52,6 @@ pub fn execute_instruction(
     // --- Account references ---
     let authenticator = &ctx.accounts.smart_wallet_authenticator;
     let payer = &ctx.accounts.payer;
-    let config = &ctx.accounts.config;
     let payer_balance_before = payer.lamports();
 
     // --- Passkey and wallet validation ---
@@ -166,7 +165,7 @@ pub fn execute_instruction(
             );
 
             // --- Only one of the programs can be the default, and they must differ ---
-            let default_rule_program = config.default_rule_program;
+            let default_rule_program = ctx.accounts.config.default_rule_program;
             require!(
                 (old_rule_program_key == default_rule_program
                     || new_rule_program_key == default_rule_program)
@@ -208,20 +207,6 @@ pub fn execute_instruction(
             let rule_program_key = ctx.accounts.authenticator_program.key();
             check_whitelist(&ctx.accounts.whitelist_rule_programs, &rule_program_key)?;
 
-            let rule_signer = get_pda_signer(
-                &args.passkey_pubkey,
-                ctx.accounts.smart_wallet.key(),
-                ctx.bumps.smart_wallet_authenticator,
-            );
-            let rule_accounts = &ctx.remaining_accounts[args.rule_data.start_index as usize
-                ..(args.rule_data.start_index as usize + args.rule_data.length as usize)];
-            execute_cpi(
-                rule_accounts,
-                args.rule_data.data.clone(),
-                &ctx.accounts.authenticator_program,
-                Some(rule_signer),
-            )?;
-
             // --- Optionally create a new smart wallet authenticator ---
             if let Some(new_authenticator) = args.create_new_authenticator {
                 let new_auth = ctx
@@ -235,6 +220,20 @@ pub fn execute_instruction(
             } else {
                 return Err(LazorKitError::InvalidAccountInput.into());
             }
+
+            let rule_signer = get_pda_signer(
+                &args.passkey_pubkey,
+                ctx.accounts.smart_wallet.key(),
+                ctx.bumps.smart_wallet_authenticator,
+            );
+            let rule_accounts = &ctx.remaining_accounts[args.rule_data.start_index as usize
+                ..(args.rule_data.start_index as usize + args.rule_data.length as usize)];
+            execute_cpi(
+                rule_accounts,
+                args.rule_data.data.clone(),
+                &ctx.accounts.authenticator_program,
+                Some(rule_signer),
+            )?;
         }
         Action::CheckAuthenticator => {
             // --- No-op: used for checking authenticator existence ---
@@ -294,23 +293,11 @@ pub struct ExecuteInstruction<'info> {
     pub smart_wallet_authenticator: Box<Account<'info, SmartWalletAuthenticator>>,
 
     #[account(
-        init,
-        payer = payer,
-        space = 8 + SmartWalletAuthenticator::INIT_SPACE,
-        seeds = [SmartWalletAuthenticator::PREFIX_SEED, smart_wallet.key().as_ref(), args.create_new_authenticator.unwrap_or([0; 33]).as_ref()],
-        bump,
-    )]
-    pub new_smart_wallet_authenticator: Option<Box<Account<'info, SmartWalletAuthenticator>>>,
-
-    #[account(
         seeds = [WhitelistRulePrograms::PREFIX_SEED],
         bump,
         owner = ID
     )]
     pub whitelist_rule_programs: Box<Account<'info, WhitelistRulePrograms>>,
-
-    /// CHECK: Used for CPI, not deserialized.
-    pub cpi_program: UncheckedAccount<'info>,
 
     /// CHECK: Used for rule CPI.
     pub authenticator_program: UncheckedAccount<'info>,
@@ -320,4 +307,16 @@ pub struct ExecuteInstruction<'info> {
     pub ix_sysvar: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// CHECK: Used for CPI, not deserialized.
+    pub cpi_program: UncheckedAccount<'info>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + SmartWalletAuthenticator::INIT_SPACE,
+        seeds = [args.create_new_authenticator.unwrap_or([0; 33]).to_hashed_bytes(smart_wallet.key()).as_ref()],
+        bump,
+    )]
+    pub new_smart_wallet_authenticator: Option<Account<'info, SmartWalletAuthenticator>>,
 }

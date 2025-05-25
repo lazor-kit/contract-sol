@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 mod errors;
 mod instructions;
 mod state;
-mod utils;
 
 use instructions::*;
 
@@ -29,10 +28,19 @@ pub mod transfer_limit {
         instructions::add_member(ctx, new_passkey_pubkey, bump)
     }
 
-    pub fn execute_instruction<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, ExecuteInstruction<'info>>,
-        args: ExecuteInstructionArgs,
+    pub fn check_rule(
+        ctx: Context<CheckRule>,
+        token: Option<Pubkey>,
+        cpi_data: Vec<u8>,
+        program_id: Pubkey,
     ) -> Result<()> {
-        instructions::execute_instruction(ctx, args)
+        instructions::check_rule(ctx, token, cpi_data, program_id)
     }
+
+    // pub fn execute_instruction<'c: 'info, 'info>(
+    //     ctx: Context<'_, '_, 'c, 'info, ExecuteInstruction<'info>>,
+    //     args: ExecuteInstructionArgs,
+    // ) -> Result<()> {
+    //     instructions::execute_instruction(ctx, args)
+    // }
 }

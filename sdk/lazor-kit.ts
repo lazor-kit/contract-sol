@@ -192,34 +192,35 @@ export class LazorKitProgram {
       length: ruleIns.keys.length,
     };
 
-    let cpiData: types.CpiData = {
-      data: Buffer.alloc(0),
-      startIndex: 0,
-      length: 0,
-    };
+    let cpiData: types.CpiData | null = null;
+
+    const remainingAccounts: anchor.web3.AccountMeta[] = [];
 
     if (cpiIns) {
       cpiData = {
         data: cpiIns.data,
-        startIndex: ruleIns.keys.length,
+        startIndex: 0,
         length: cpiIns.keys.length,
       };
+
+      remainingAccounts.push(
+        ...cpiIns.keys.map((key) => ({
+          pubkey: key.pubkey,
+          isWritable: key.isWritable,
+          isSigner: key.pubkey.equals(payer),
+        }))
+      );
+
+      ruleData.startIndex = cpiIns.keys.length;
     }
 
-    const remainingAccounts: anchor.web3.AccountMeta[] = [
+    remainingAccounts.push(
       ...ruleIns.keys.map((key) => ({
         pubkey: key.pubkey,
         isWritable: key.isWritable,
         isSigner: key.pubkey.equals(payer),
-      })),
-      ...(cpiIns
-        ? cpiIns.keys.map((key) => ({
-            pubkey: key.pubkey,
-            isWritable: key.isWritable,
-            isSigner: key.pubkey.equals(payer),
-          }))
-        : []),
-    ];
+      }))
+    );
 
     const verifySignatureIx = createSecp256r1Instruction(
       message,
@@ -234,7 +235,6 @@ export class LazorKitProgram {
         smartWallet
       );
     }
-    console.log("1", newSmartWalletAuthenticator);
 
     const executeInstructionIx = await this.program.methods
       .executeInstruction({
@@ -249,14 +249,16 @@ export class LazorKitProgram {
       })
       .accountsPartial({
         payer,
+        config: this.config,
         smartWallet,
         smartWalletConfig: this.smartWalletConfig(smartWallet),
         smartWalletAuthenticator,
         whitelistRulePrograms: this.whitelistRulePrograms,
         authenticatorProgram: ruleIns.programId,
         ixSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
         cpiProgram: cpiIns ? cpiIns.programId : anchor.web3.PublicKey.default,
-        newSmartWalletAuthenticator,
+        newSmartWalletAuthenticator: newSmartWalletAuthenticator,
       })
       .remainingAccounts(remainingAccounts)
       .instruction();

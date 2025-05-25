@@ -21,4 +21,8 @@ pub enum TransferLimitError {
     UnAuthorize,
 
     InvalidBump,
+
+    MemberNotInitialized,
+
+    TransferAmountExceedLimit,
 }
