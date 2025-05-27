@@ -7,9 +7,3 @@ pub struct Rule {
     pub admin: Pubkey,
     pub is_initialized: bool,
 }
-
-#[account]
-#[derive(Debug, InitSpace)]
-pub struct Config {
-    pub authority: Pubkey,
-}

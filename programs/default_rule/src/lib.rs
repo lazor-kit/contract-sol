@@ -13,10 +13,6 @@ pub mod default_rule {
 
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>, lazorkit_author: Pubkey) -> Result<()> {
-        instructions::initialize(ctx, lazorkit_author)
-    }
-
     pub fn init_rule(ctx: Context<InitRule>) -> Result<()> {
         instructions::init_rule(ctx)
     }

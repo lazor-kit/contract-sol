@@ -32,13 +32,6 @@ export class LazorKitProgram {
     return this.program.account.smartWalletSeq.fetch(this.smartWalletSeq);
   }
 
-  get authority(): anchor.web3.PublicKey {
-    return anchor.web3.PublicKey.findProgramAddressSync(
-      [constants.AUTHORITY_SEED],
-      this.programId
-    )[0];
-  }
-
   async getLastestSmartWallet(): Promise<anchor.web3.PublicKey> {
     const seqData = await this.program.account.smartWalletSeq.fetch(
       this.smartWalletSeq
@@ -105,10 +98,16 @@ export class LazorKitProgram {
         config: this.config,
         whitelistRulePrograms: this.whitelistRulePrograms,
         smartWalletSeq: this.smartWalletSeq,
-        authority: this.authority,
         defaultRuleProgram,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
+      .remainingAccounts([
+        {
+          pubkey: anchor.web3.BPF_LOADER_PROGRAM_ID,
+          isWritable: false,
+          isSigner: false,
+        },
+      ])
       .instruction();
     return new anchor.web3.Transaction().add(ix);
   }

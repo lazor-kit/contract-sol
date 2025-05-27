@@ -6,10 +6,12 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
+lazorkit = "3CFG1eVGpUVAxMeuFnNw7CbBA1GQ746eQDdMWPoFTAD8"
+transfer_limit = "HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8"
 default_rule = "B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W"
 
 [programs.localnet]
-lazorkit = "DAcTNgSppWiDvfTWa7PMvPmXHAs5DfBnrqRQme8fXJBb"
+lazorkit = "3CFG1eVGpUVAxMeuFnNw7CbBA1GQ746eQDdMWPoFTAD8"
 transfer_limit = "HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8"
 default_rule = "B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W"
 
@@ -17,7 +19,7 @@ default_rule = "B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

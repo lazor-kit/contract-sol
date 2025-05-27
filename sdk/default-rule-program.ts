@@ -35,26 +35,11 @@ export class DefaultRuleProgram {
     )[0];
   }
 
-  async initializeTxn(
-    payer: anchor.web3.PublicKey,
-    authority: anchor.web3.PublicKey
-  ) {
-    return new anchor.web3.Transaction().add(
-      await this.program.methods
-        .initialize(authority)
-        .accounts({
-          signer: payer,
-        })
-        .instruction()
-    );
-  }
-
   async initRuleIns(
     payer: anchor.web3.PublicKey,
     smartWallet: anchor.web3.PublicKey,
     smartWalletAuthenticator: anchor.web3.PublicKey
   ) {
-    const configData = await this.program.account.config.fetch(this.config);
     return await this.program.methods
       .initRule()
       .accountsPartial({

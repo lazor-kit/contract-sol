@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{
-    constants::AUTHORITY_SEED,
-    state::{Config, SmartWalletSeq, WhitelistRulePrograms},
-};
+use crate::state::{Config, SmartWalletSeq, WhitelistRulePrograms};
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     let whitelist_rule_programs = &mut ctx.accounts.whitelist_rule_programs;
@@ -15,8 +12,6 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.create_smart_wallet_fee = 0; // LAMPORTS
     config.default_rule_program = ctx.accounts.default_rule_program.key();
-    config.authority_bump = ctx.bumps.authority;
-
     Ok(())
 }
 
@@ -51,16 +46,6 @@ pub struct Initialize<'info> {
         bump
     )]
     pub smart_wallet_seq: Box<Account<'info, SmartWalletSeq>>,
-
-    #[account(
-        init_if_needed,
-        payer = signer,
-        space = 0,
-        seeds = [AUTHORITY_SEED],
-        bump,
-    )]
-    /// CHECK: Only used for key and seeds.
-    pub authority: UncheckedAccount<'info>,
 
     /// CHECK:
     pub default_rule_program: UncheckedAccount<'info>,

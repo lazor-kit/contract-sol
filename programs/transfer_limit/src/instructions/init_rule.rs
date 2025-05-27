@@ -3,10 +3,9 @@ use lazorkit::{
     constants::SMART_WALLET_SEED,
     program::Lazorkit,
     state::{SmartWalletAuthenticator, SmartWalletConfig},
-    utils::PasskeyExt,
 };
 
-use crate::state::*;
+use crate::{errors::TransferLimitError, state::*};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitRuleArgs {
@@ -21,7 +20,7 @@ pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
     rule_data.set_inner(RuleData {
         token: args.token,
         limit_amount: args.limit_amount,
-        bump: ctx.bumps.smart_wallet_authenticator,
+        bump: ctx.bumps.rule_data,
         is_initialized: true,
     });
 
@@ -30,10 +29,15 @@ pub fn init_rule(ctx: Context<InitRule>, args: InitRuleArgs) -> Result<()> {
         member.set_inner(Member {
             smart_wallet: ctx.accounts.smart_wallet.key(),
             owner: ctx.accounts.smart_wallet_authenticator.key(),
-            bump: ctx.bumps.smart_wallet_authenticator,
+            bump: ctx.bumps.member,
             is_initialized: true,
             member_type: MemberType::Admin,
         });
+    } else {
+        require!(
+            member.member_type == MemberType::Admin,
+            TransferLimitError::MemberNotAdmin
+        );
     }
     Ok(())
 }
@@ -77,12 +81,7 @@ pub struct InitRule<'info> {
     )]
     pub smart_wallet_config: Account<'info, SmartWalletConfig>,
 
-    #[account(
-        seeds = [args.passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],
-        bump,
-        seeds::program = lazorkit.key(), // LazorKit ID
-        signer,
-    )]
+    #[account(signer)]
     pub smart_wallet_authenticator: Account<'info, SmartWalletAuthenticator>,
 
     pub lazorkit: Program<'info, Lazorkit>,

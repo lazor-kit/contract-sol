@@ -14,7 +14,7 @@ import { createNewMint, mintTokenTo } from "./utils";
 import { createTransferCheckedInstruction } from "@solana/spl-token";
 dotenv.config();
 
-describe.skip("Test smart wallet with default rule", () => {
+describe("Test smart wallet with default rule", () => {
   const connection = new anchor.web3.Connection(
     process.env.RPC_URL || "http://localhost:8899",
     "confirmed"
@@ -35,7 +35,7 @@ describe.skip("Test smart wallet with default rule", () => {
       lazorkitProgram.smartWalletSeq
     );
 
-    if (smartWalletSeqAccountInfo === null) {
+    if (smartWalletSeqAccountInfo == null) {
       const txn = await lazorkitProgram.initializeTxn(
         payer.publicKey,
         defaultRuleProgram.programId
@@ -45,25 +45,9 @@ describe.skip("Test smart wallet with default rule", () => {
         commitment: "confirmed",
       });
     }
-
-    const defaultRuleConfigAccountInfo = await connection.getAccountInfo(
-      defaultRuleProgram.config
-    );
-
-    if (defaultRuleConfigAccountInfo === null) {
-      // create the default rule program
-      const txn = await defaultRuleProgram.initializeTxn(
-        payer.publicKey,
-        lazorkitProgram.authority
-      );
-
-      await sendAndConfirmTransaction(connection, txn, [payer], {
-        commitment: "confirmed",
-      });
-    }
   });
 
-  it("Initialize successfully", async () => {
+  xit("Initialize successfully", async () => {
     const privateKey = ECDSA.generateKey();
 
     const publicKeyBase64 = privateKey.toCompressedPublicKey();
@@ -235,7 +219,7 @@ describe.skip("Test smart wallet with default rule", () => {
     console.log("Execute txn: ", sig);
   });
 
-  it("Spend Token successfully", async () => {
+  xit("Spend Token successfully", async () => {
     const privateKey = ECDSA.generateKey();
 
     const publicKeyBase64 = privateKey.toCompressedPublicKey();
