@@ -1,9 +1,10 @@
-import * as anchor from "@coral-xyz/anchor";
-import IDL from "../target/idl/lazorkit.json";
-import { Lazorkit } from "../target/types/lazorkit";
-import * as constants from "./constants";
-import { createSecp256r1Instruction, hashSeeds } from "./utils";
-import * as types from "./types";
+import * as anchor from '@coral-xyz/anchor';
+import IDL from '../target/idl/lazorkit.json';
+import { Lazorkit } from '../target/types/lazorkit';
+import * as constants from './constants';
+import { createSecp256r1Instruction, hashSeeds } from './utils';
+import * as types from './types';
+import { sha256 } from 'js-sha256';
 
 export class LazorKitProgram {
   readonly connection: anchor.web3.Connection;
@@ -37,7 +38,7 @@ export class LazorKitProgram {
       this.smartWalletSeq
     );
     return anchor.web3.PublicKey.findProgramAddressSync(
-      [constants.SMART_WALLET_SEED, seqData.seq.toArrayLike(Buffer, "le", 8)],
+      [constants.SMART_WALLET_SEED, seqData.seq.toArrayLike(Buffer, 'le', 8)],
       this.programId
     )[0];
   }
@@ -169,13 +170,14 @@ export class LazorKitProgram {
 
   async executeInstructionTxn(
     passkeyPubkey: number[],
-    message: Buffer,
+    clientDataJsonRaw: Buffer,
+    authenticatorDataRaw: Buffer,
     signature: Buffer,
     ruleIns: anchor.web3.TransactionInstruction,
     cpiIns: anchor.web3.TransactionInstruction = null,
     payer: anchor.web3.PublicKey,
     smartWallet: anchor.web3.PublicKey,
-    executeAction: anchor.IdlTypes<Lazorkit>["action"] = types.ExecuteAction
+    executeAction: anchor.IdlTypes<Lazorkit>['action'] = types.ExecuteAction
       .ExecuteCpi,
     createNewAuthenticator: number[] = null,
     verifyInstructionIndex: number = 0
@@ -221,6 +223,11 @@ export class LazorKitProgram {
       }))
     );
 
+    const message = Buffer.concat([
+      authenticatorDataRaw,
+      Buffer.from(sha256.arrayBuffer(clientDataJsonRaw)),
+    ]);
+
     const verifySignatureIx = createSecp256r1Instruction(
       message,
       Buffer.from(passkeyPubkey),
@@ -239,7 +246,8 @@ export class LazorKitProgram {
       .executeInstruction({
         passkeyPubkey,
         signature,
-        message,
+        clientDataJsonRaw,
+        authenticatorDataRaw,
         verifyInstructionIndex,
         ruleData: ruleData,
         cpiData: cpiData,

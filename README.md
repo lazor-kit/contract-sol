@@ -1,6 +1,6 @@
-anchor idl init -f ./target/idl/lazorkit.json 3CFG1eVGpUVAxMeuFnNw7CbBA1GQ746eQDdMWPoFTAD8
-anchor idl init -f ./target/idl/transfer_limit.json HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8
-anchor idl init -f ./target/idl/default_rule.json B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W
-anchor idl upgrade 3CFG1eVGpUVAxMeuFnNw7CbBA1GQ746eQDdMWPoFTAD8 -f ./target/idl/lazorkit.json
-anchor idl upgrade HjgdxTNPqpL59KLRVDwQ28cqam2SxBirnNN5SFAFGHZ8 -f ./target/idl/transfer_limit.json
-anchor idl upgrade B98ooLRYBP6m6Zsrd3Hnzn4UAejfVZwyDgMFaBNzVR2W -f ./target/idl/default_rule.jsona
+anchor idl init -f ./target/idl/lazorkit.json 33tS3mSoyvdmKWxb6bgSL657AqH4Wxsu9R6GnvjtZdEd
+anchor idl init -f ./target/idl/transfer_limit.json EXYavpYDn6twyPvsGtvuJkEaGeqbN5TLCnC3Fp3evv85
+anchor idl init -f ./target/idl/default_rule.json scdFpnHi1Hu1BbKPwEdhRcdWwu5DohSWxCAg3UeDNKZ
+anchor idl upgrade 33tS3mSoyvdmKWxb6bgSL657AqH4Wxsu9R6GnvjtZdEd -f ./target/idl/lazorkit.json
+anchor idl upgrade EXYavpYDn6twyPvsGtvuJkEaGeqbN5TLCnC3Fp3evv85 -f ./target/idl/transfer_limit.json
+anchor idl upgrade scdFpnHi1Hu1BbKPwEdhRcdWwu5DohSWxCAg3UeDNKZ -f ./target/idl/default_rule.jsona

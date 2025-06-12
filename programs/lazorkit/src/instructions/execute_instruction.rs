@@ -1,3 +1,5 @@
+use anchor_lang::solana_program::hash::hash; // ✅ required import
+
 use anchor_lang::{prelude::*, solana_program::sysvar::instructions::load_instruction_at_checked};
 
 use crate::state::Config;
@@ -28,12 +30,13 @@ pub enum Action {
 pub struct ExecuteInstructionArgs {
     pub passkey_pubkey: [u8; 33],
     pub signature: Vec<u8>,
-    pub message: Vec<u8>,
+    pub client_data_json_raw: Vec<u8>, // Match field name used in SDK
+    pub authenticator_data_raw: Vec<u8>,   // Added missing field
     pub verify_instruction_index: u8,
     pub rule_data: CpiData,
     pub cpi_data: Option<CpiData>,
     pub action: Action,
-    pub create_new_authenticator: Option<[u8; 33]>,
+    pub create_new_authenticator: Option<[u8; 33]>, // Make sure this field name is consistent
 }
 
 /// Data for a CPI call (instruction data and account slice)
@@ -66,10 +69,21 @@ pub fn execute_instruction(
         args.verify_instruction_index as usize,
         &ctx.accounts.ix_sysvar,
     )?;
+
+    let client_hash = hash(&args.client_data_json_raw); // ✅ SHA-256 of JSON bytes
+
+    let mut message = args.authenticator_data_raw.clone();
+    message.extend_from_slice(client_hash.as_ref());
+
+
+    let json_str = std::str::from_utf8(&args.client_data_json_raw).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(json_str).unwrap();
+    let challenge = parsed["challenge"].as_str().unwrap_or_default();
+
     verify_secp256r1_instruction(
         &secp_ix,
         authenticator.passkey_pubkey,
-        args.message,
+        message,
         args.signature,
     )?;
 
@@ -312,10 +326,14 @@ pub struct ExecuteInstruction<'info> {
     pub cpi_program: UncheckedAccount<'info>,
 
     #[account(
-        init,
+        init_if_needed, // Change to init_if_needed to handle both cases
         payer = payer,
         space = 8 + SmartWalletAuthenticator::INIT_SPACE,
-        seeds = [args.create_new_authenticator.unwrap_or([0; 33]).to_hashed_bytes(smart_wallet.key()).as_ref()],
+        seeds = [
+            SmartWalletAuthenticator::PREFIX_SEED,  // Add this constant seed
+            smart_wallet.key().as_ref(), 
+            args.create_new_authenticator.unwrap_or([0; 33]).to_hashed_bytes(smart_wallet.key()).as_ref()
+        ],
         bump,
     )]
     pub new_smart_wallet_authenticator: Option<Account<'info, SmartWalletAuthenticator>>,
