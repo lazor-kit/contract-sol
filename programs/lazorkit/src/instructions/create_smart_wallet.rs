@@ -21,6 +21,7 @@ pub fn create_smart_wallet(
     wallet_data.set_inner(SmartWalletConfig {
         rule_program: ctx.accounts.config.default_rule_program,
         id: sequence_account.seq,
+        last_nonce: 0,
         bump: ctx.bumps.smart_wallet,
     });
 
