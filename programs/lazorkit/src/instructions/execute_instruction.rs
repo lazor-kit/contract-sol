@@ -81,18 +81,18 @@ pub fn execute_instruction(
     let parsed: serde_json::Value = serde_json::from_str(json_str).unwrap();
     let challenge = parsed["challenge"].as_str().unwrap_or_default();
 
-    let msg = Message::try_from_slice(challenge.as_bytes())?;
-    // check if timestamp is within 30 seconds
-    require!(
-        msg.timestamp.saturating_sub(30) <= Clock::get()?.unix_timestamp,
-        LazorKitError::InvalidTimestamp
-    );
+    // let msg = Message::try_from_slice(challenge.as_bytes())?;
+    // // check if timestamp is within 30 seconds
+    // require!(
+    //     msg.timestamp.saturating_sub(30) <= Clock::get()?.unix_timestamp,
+    //     LazorKitError::InvalidTimestamp
+    // );
 
-    // check if nonce is greater than last nonce
-    require!(
-        msg.nonce == smart_wallet_config.last_nonce,
-        LazorKitError::InvalidNonce
-    );
+    // // check if nonce is greater than last nonce
+    // require!(
+    //     msg.nonce == smart_wallet_config.last_nonce,
+    //     LazorKitError::InvalidNonce
+    // );
 
     verify_secp256r1_instruction(
         &secp_ix,
