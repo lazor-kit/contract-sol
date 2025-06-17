@@ -33,17 +33,16 @@ pub fn create_smart_wallet(
         credential_id,
         bump: ctx.bumps.smart_wallet_authenticator,
     });
-
     let signer = PdaSigner {
-        seeds: passkey_pubkey
+        seeds: vec![passkey_pubkey
             .to_hashed_bytes(ctx.accounts.smart_wallet.key())
-            .to_vec(),
+            .to_vec()],
         bump: ctx.bumps.smart_wallet_authenticator,
     };
 
     execute_cpi(
         &ctx.remaining_accounts,
-        rule_data,
+        &rule_data,
         &ctx.accounts.default_rule_program,
         Some(signer),
     )?;
@@ -103,7 +102,11 @@ pub struct CreateSmartWallet<'info> {
         init,
         payer = signer,
         space = 8 + SmartWalletAuthenticator::INIT_SPACE,
-        seeds = [passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()],
+        seeds = [
+            SmartWalletAuthenticator::PREFIX_SEED,
+            smart_wallet.key().as_ref(),
+            passkey_pubkey.to_hashed_bytes(smart_wallet.key()).as_ref()
+        ],
         bump
     )]
     pub smart_wallet_authenticator: Box<Account<'info, SmartWalletAuthenticator>>,
