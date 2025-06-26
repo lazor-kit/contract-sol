@@ -3,13 +3,12 @@ use anchor_lang::prelude::*;
 use crate::state::{Config, SmartWalletSeq};
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    let smart_wallet_seq = &mut ctx.accounts.smart_wallet_seq;
-    smart_wallet_seq.seq = 0;
+    ctx.accounts.smart_wallet_seq.seq = 0;
 
-    let config: &mut Box<Account<'_, Config>> = &mut ctx.accounts.config;
+    let config = &mut ctx.accounts.config;
     config.authority = ctx.accounts.signer.key();
-    config.create_smart_wallet_fee = 0; // LAMPORTS
-    config.execute_instruction_fee = 0; // LAMPORTS
+    config.create_smart_wallet_fee = 0;
+    config.execute_instruction_fee = 0;
     Ok(())
 }
 
@@ -25,7 +24,7 @@ pub struct Initialize<'info> {
         seeds = [Config::PREFIX_SEED],
         bump,
     )]
-    pub config: Box<Account<'info, Config>>,
+    pub config: Account<'info, Config>,
 
     #[account(
         init_if_needed,
@@ -34,10 +33,7 @@ pub struct Initialize<'info> {
         seeds = [SmartWalletSeq::PREFIX_SEED],
         bump
     )]
-    pub smart_wallet_seq: Box<Account<'info, SmartWalletSeq>>,
-
-    /// CHECK:
-    pub default_rule_program: UncheckedAccount<'info>,
+    pub smart_wallet_seq: Account<'info, SmartWalletSeq>,
 
     pub system_program: Program<'info, System>,
 }

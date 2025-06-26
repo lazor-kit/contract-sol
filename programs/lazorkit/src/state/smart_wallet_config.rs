@@ -8,8 +8,6 @@ pub struct SmartWalletConfig {
     pub id: u64,
     // last nonce used for message verification
     pub last_nonce: u64,
-    /// Bump seed for PDA derivation
-    pub bump: u8,
 }
 
 impl SmartWalletConfig {

@@ -33,7 +33,6 @@ export class LazorKitProgram {
 
   /** Frequently-used PDA caches (network-independent, so safe to memoise) */
   private _smartWalletSeq?: anchor.web3.PublicKey;
-  private _whitelistRulePrograms?: anchor.web3.PublicKey;
   private _config?: anchor.web3.PublicKey;
 
   constructor(connection: anchor.web3.Connection) {
@@ -109,17 +108,6 @@ export class LazorKitProgram {
       [constants.SMART_WALLET_CONFIG_SEED, smartWallet.toBuffer()],
       this.programId
     )[0];
-  }
-
-  get whitelistRulePrograms(): anchor.web3.PublicKey {
-    if (!this._whitelistRulePrograms) {
-      this._whitelistRulePrograms =
-        anchor.web3.PublicKey.findProgramAddressSync(
-          [constants.WHITELIST_RULE_PROGRAMS_SEED],
-          this.programId
-        )[0];
-    }
-    return this._whitelistRulePrograms;
   }
 
   get config(): anchor.web3.PublicKey {

@@ -105,7 +105,7 @@ pub fn verify_secp256r1_instruction(
     ix: &Instruction,
     pubkey: [u8; SECP_PUBKEY_SIZE as usize],
     msg: Vec<u8>,
-    sig: Vec<u8>,
+    sig: &[u8],
 ) -> Result<()> {
     let expected_len =
         (SECP_DATA_START + SECP_PUBKEY_SIZE + SECP_SIGNATURE_SIZE) as usize + msg.len();
@@ -120,7 +120,7 @@ fn verify_secp256r1_data(
     data: &[u8],
     public_key: [u8; SECP_PUBKEY_SIZE as usize],
     message: Vec<u8>,
-    signature: Vec<u8>,
+    signature: &[u8],
 ) -> Result<()> {
     let msg_len = message.len() as u16;
     let offsets = calculate_secp_offsets(msg_len);
@@ -129,7 +129,7 @@ fn verify_secp256r1_data(
         return Err(LazorKitError::Secp256r1HeaderMismatch.into());
     }
 
-    if !verify_secp_data(data, &public_key, &signature, &message) {
+    if !verify_secp_data(data, &public_key, signature, &message) {
         return Err(LazorKitError::Secp256r1DataMismatch.into());
     }
 
@@ -193,7 +193,6 @@ impl PasskeyExt for [u8; SECP_PUBKEY_SIZE as usize] {
     }
 }
 
-/// Transfer SOL from a PDA-owned account
 #[inline]
 pub fn transfer_sol_from_pda(from: &AccountInfo, to: &AccountInfo, amount: u64) -> Result<()> {
     // Ensure the 'from' account is owned by this program
