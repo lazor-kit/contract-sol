@@ -10,7 +10,6 @@ import {
 } from './utils';
 import * as types from './types';
 import { sha256 } from 'js-sha256';
-import { DefaultRuleProgram } from './default-rule-program';
 import * as borsh from 'borsh';
 import { Buffer } from 'buffer';
 
@@ -37,12 +36,8 @@ export class LazorKitProgram {
   private _whitelistRulePrograms?: anchor.web3.PublicKey;
   private _config?: anchor.web3.PublicKey;
 
-  /** Embedded helper for the on-chain default rule program */
-  readonly defaultRuleProgram: DefaultRuleProgram;
-
   constructor(connection: anchor.web3.Connection) {
     this.connection = connection;
-    this.defaultRuleProgram = new DefaultRuleProgram(connection);
   }
 
   get program(): anchor.Program<Lazorkit> {
@@ -138,17 +133,14 @@ export class LazorKitProgram {
   }
 
   async initializeTxn(
-    payer: anchor.web3.PublicKey,
-    defaultRuleProgram: anchor.web3.PublicKey
+    payer: anchor.web3.PublicKey
   ): Promise<anchor.web3.Transaction> {
     const ix = await this.program.methods
       .initialize()
       .accountsPartial({
         signer: payer,
         config: this.config,
-        whitelistRulePrograms: this.whitelistRulePrograms,
         smartWalletSeq: this.smartWalletSeq,
-        defaultRuleProgram,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .remainingAccounts([
@@ -162,24 +154,8 @@ export class LazorKitProgram {
     return new anchor.web3.Transaction().add(ix);
   }
 
-  async upsertWhitelistRuleProgramsTxn(
-    payer: anchor.web3.PublicKey,
-    ruleProgram: anchor.web3.PublicKey
-  ): Promise<anchor.web3.Transaction> {
-    const ix = await this.program.methods
-      .upsertWhitelistRulePrograms(ruleProgram)
-      .accountsPartial({
-        authority: payer,
-        config: this._config ?? this.config,
-        whitelistRulePrograms: this.whitelistRulePrograms,
-      })
-      .instruction();
-    return new anchor.web3.Transaction().add(ix);
-  }
-
   async createSmartWalletTxn(
     passkeyPubkey: number[],
-    ruleIns: anchor.web3.TransactionInstruction | null,
     payer: anchor.web3.PublicKey,
     credentialId: string = ''
   ): Promise<anchor.web3.Transaction> {
@@ -190,35 +166,17 @@ export class LazorKitProgram {
       smartWallet
     );
 
-    // If caller does not provide a rule instruction, default to initRule of DefaultRuleProgram
-    const ruleInstruction =
-      ruleIns ||
-      (await this.defaultRuleProgram.initRuleIns(
-        payer,
-        smartWallet,
-        smartWalletAuthenticator
-      ));
-
-    const remainingAccounts = instructionToAccountMetas(ruleInstruction, payer);
-
     const createSmartWalletIx = await this.program.methods
-      .createSmartWallet(
-        passkeyPubkey,
-        Buffer.from(credentialId, 'base64'),
-        ruleInstruction.data
-      )
+      .createSmartWallet(passkeyPubkey, Buffer.from(credentialId, 'base64'))
       .accountsPartial({
         signer: payer,
         smartWalletSeq: this.smartWalletSeq,
-        whitelistRulePrograms: this.whitelistRulePrograms,
         smartWallet,
         smartWalletConfig: this.smartWalletConfig(smartWallet),
         smartWalletAuthenticator,
         config: this.config,
-        defaultRuleProgram: configData.defaultRuleProgram,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .remainingAccounts(remainingAccounts)
       .instruction();
 
     const tx = new anchor.web3.Transaction().add(createSmartWalletIx);
@@ -234,11 +192,7 @@ export class LazorKitProgram {
     signature: Buffer,
     payer: anchor.web3.PublicKey,
     smartWallet: anchor.web3.PublicKey,
-    ruleIns: anchor.web3.TransactionInstruction | null = null,
-    cpiIns: anchor.web3.TransactionInstruction | null = null,
-    executeAction: anchor.IdlTypes<Lazorkit>['action'] = types.ExecuteAction
-      .ExecuteCpi,
-    createNewAuthenticator: number[] = null,
+    cpiIns: anchor.web3.TransactionInstruction,
     verifyInstructionIndex: number = 1
   ): Promise<anchor.web3.Transaction> {
     const [smartWalletAuthenticator] = this.smartWalletAuthenticator(
@@ -246,40 +200,9 @@ export class LazorKitProgram {
       smartWallet
     );
 
-    const ruleInstruction =
-      ruleIns ||
-      (await this.defaultRuleProgram.checkRuleIns(
-        smartWallet,
-        smartWalletAuthenticator
-      ));
-
-    const ruleData: types.CpiData = {
-      data: ruleInstruction.data,
-      startIndex: 0,
-      length: ruleInstruction.keys.length,
-    };
-
-    let cpiData: types.CpiData | null = null;
-
-    const remainingAccounts: anchor.web3.AccountMeta[] = [];
-
-    if (cpiIns) {
-      cpiData = {
-        data: cpiIns.data,
-        startIndex: 0,
-        length: cpiIns.keys.length,
-      };
-
-      // The order matters: first CPI accounts, then rule accounts.
-      remainingAccounts.push(...instructionToAccountMetas(cpiIns, payer));
-
-      ruleData.startIndex = cpiIns.keys.length;
-    }
-
-    // Rule program accounts always follow.
-    remainingAccounts.push(
-      ...instructionToAccountMetas(ruleInstruction, payer)
-    );
+    const remainingAccounts: anchor.web3.AccountMeta[] = [
+      ...instructionToAccountMetas(cpiIns, payer),
+    ];
 
     const message = Buffer.concat([
       authenticatorDataRaw,
@@ -292,14 +215,6 @@ export class LazorKitProgram {
       signature
     );
 
-    let newSmartWalletAuthenticator: anchor.web3.PublicKey | null = null;
-    if (createNewAuthenticator) {
-      [newSmartWalletAuthenticator] = this.smartWalletAuthenticator(
-        createNewAuthenticator,
-        smartWallet
-      );
-    }
-
     const executeInstructionIx = await this.program.methods
       .executeInstruction({
         passkeyPubkey,
@@ -307,10 +222,7 @@ export class LazorKitProgram {
         clientDataJsonRaw,
         authenticatorDataRaw,
         verifyInstructionIndex,
-        ruleData: ruleData,
-        cpiData: cpiData,
-        action: executeAction,
-        createNewAuthenticator,
+        cpiData: cpiIns.data,
       })
       .accountsPartial({
         payer,
@@ -318,12 +230,10 @@ export class LazorKitProgram {
         smartWallet,
         smartWalletConfig: this.smartWalletConfig(smartWallet),
         smartWalletAuthenticator,
-        whitelistRulePrograms: this.whitelistRulePrograms,
-        authenticatorProgram: ruleInstruction.programId,
+
         ixSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,
-        cpiProgram: cpiIns ? cpiIns.programId : anchor.web3.PublicKey.default,
-        newSmartWalletAuthenticator: newSmartWalletAuthenticator,
+        cpiProgram: cpiIns.programId,
       })
       .remainingAccounts(remainingAccounts)
       .instruction();

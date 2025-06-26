@@ -2,10 +2,8 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::{PASSKEY_SIZE, SMART_WALLET_SEED},
-    state::{
-        Config, SmartWalletAuthenticator, SmartWalletConfig, SmartWalletSeq, WhitelistRulePrograms,
-    },
-    utils::{execute_cpi, transfer_sol_from_pda, PasskeyExt, PdaSigner},
+    state::{Config, SmartWalletAuthenticator, SmartWalletConfig, SmartWalletSeq},
+    utils::{transfer_sol_from_pda, PasskeyExt},
     ID,
 };
 
@@ -13,14 +11,12 @@ pub fn create_smart_wallet(
     ctx: Context<CreateSmartWallet>,
     passkey_pubkey: [u8; PASSKEY_SIZE],
     credential_id: Vec<u8>,
-    rule_data: Vec<u8>,
 ) -> Result<()> {
     let wallet_data = &mut ctx.accounts.smart_wallet_config;
     let sequence_account = &mut ctx.accounts.smart_wallet_seq;
     let smart_wallet_authenticator = &mut ctx.accounts.smart_wallet_authenticator;
 
     wallet_data.set_inner(SmartWalletConfig {
-        rule_program: ctx.accounts.config.default_rule_program,
         id: sequence_account.seq,
         last_nonce: 0,
         bump: ctx.bumps.smart_wallet,
@@ -33,24 +29,6 @@ pub fn create_smart_wallet(
         credential_id,
         bump: ctx.bumps.smart_wallet_authenticator,
     });
-    let signer = PdaSigner {
-        seeds: vec![
-            SmartWalletAuthenticator::PREFIX_SEED.to_vec(),
-            ctx.accounts.smart_wallet.key().as_ref().to_vec(),
-            passkey_pubkey
-                .to_hashed_bytes(ctx.accounts.smart_wallet.key())
-                .as_ref()
-                .to_vec(),
-        ],
-        bump: ctx.bumps.smart_wallet_authenticator,
-    };
-
-    execute_cpi(
-        &ctx.remaining_accounts,
-        &rule_data,
-        &ctx.accounts.default_rule_program,
-        Some(signer),
-    )?;
 
     sequence_account.seq += 1;
 
@@ -76,13 +54,6 @@ pub struct CreateSmartWallet<'info> {
         bump,
     )]
     pub smart_wallet_seq: Account<'info, SmartWalletSeq>,
-
-    #[account(
-        seeds = [WhitelistRulePrograms::PREFIX_SEED],
-        bump,
-        owner = ID
-    )]
-    pub whitelist_rule_programs: Account<'info, WhitelistRulePrograms>,
 
     #[account(
         init,
@@ -122,12 +93,6 @@ pub struct CreateSmartWallet<'info> {
         owner = ID
     )]
     pub config: Box<Account<'info, Config>>,
-
-    #[account(
-        address = config.default_rule_program
-    )]
-    /// CHECK:
-    pub default_rule_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
