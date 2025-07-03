@@ -329,43 +329,29 @@ export class LazorKitProgram {
       new anchor.web3.PublicKey(smartWallet)
     );
 
-    class Message {
-      nonce: anchor.BN;
-      current_slot: anchor.BN;
-      instruction_data: Buffer;
-      constructor(fields: {
-        nonce: anchor.BN;
-        current_slot: anchor.BN;
-        instruction_data: Buffer;
-      }) {
-        this.nonce = fields.nonce;
-        this.current_slot = fields.current_slot;
-        this.instruction_data = fields.instruction_data;
-      }
-    }
-
-    const schema = new Map([
-      [
-        Message,
-        {
-          kind: 'struct',
-          fields: [
-            ['nonce', 'u64'],
-            ['current_slot', 'i64'],
-            ['instruction_data', 'vec<u8>'],
-          ],
-        },
-      ],
-    ]);
-
-    const encoded = borsh.serialize(
-      schema,
-      new Message({
-        nonce: smartWalletData.lastNonce,
-        current_slot: new anchor.BN(await this.connection.getSlot()),
-        instruction_data: instructionData,
-      })
-    );
-    return Buffer.from(encoded);
+    // Manually serialize the message struct:
+    // - nonce (u64): 8 bytes
+    // - current_slot (i64): 8 bytes  
+    // - instruction_data (Vec<u8>): 4 bytes length + data bytes
+    
+    const currentSlot = await this.connection.getSlot();
+    const instructionDataLength = instructionData.length;
+    
+    // Calculate total buffer size: 8 + 8 + 4 + instructionDataLength
+    const buffer = Buffer.alloc(20 + instructionDataLength);
+    
+    // Write nonce as little-endian u64 (bytes 0-7)
+    buffer.writeBigUInt64LE(BigInt(smartWalletData.lastNonce.toString()), 0);
+    
+    // Write current_slot as little-endian i64 (bytes 8-15)
+    buffer.writeBigInt64LE(BigInt(currentSlot), 8);
+    
+    // Write instruction_data length as little-endian u32 (bytes 16-19)
+    buffer.writeUInt32LE(instructionDataLength, 16);
+    
+    // Write instruction_data bytes (starting at byte 20)
+    instructionData.copy(buffer, 20);
+    
+    return buffer;
   }
 }

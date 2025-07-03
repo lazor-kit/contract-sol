@@ -188,6 +188,5 @@ pub struct ExecuteInstruction<'info> {
     pub system_program: Program<'info, System>,
 
     /// CHECK: Used for CPI, not deserialized.
-    #[account(mut)]
     pub cpi_program: UncheckedAccount<'info>,
 }
