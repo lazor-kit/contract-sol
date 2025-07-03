@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-lazorkit = "6Jh4kA4rkZquv9XofKqgbyrRcTDF19uM5HL4xyh6gaSo"
+lazorkit = "9gJ7jZaAvUafgTFPoqkCwbuvC9kpZCPtHfHjMkQ66wu9"
 
 [programs.localnet]
-lazorkit = "6Jh4kA4rkZquv9XofKqgbyrRcTDF19uM5HL4xyh6gaSo"
+lazorkit = "9gJ7jZaAvUafgTFPoqkCwbuvC9kpZCPtHfHjMkQ66wu9"
 
 [registry]
 url = "https://api.apr.dev"

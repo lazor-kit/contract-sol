@@ -6,5 +6,3 @@ export type SmartWalletSeq = anchor.IdlTypes<Lazorkit>['smartWalletSeq'];
 export type SmartWalletConfig = anchor.IdlTypes<Lazorkit>['smartWalletConfig'];
 export type SmartWalletAuthenticator =
   anchor.IdlTypes<Lazorkit>['smartWalletAuthenticator'];
-
-export type SmartWallet = anchor.Idl;

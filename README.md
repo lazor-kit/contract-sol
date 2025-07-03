@@ -396,7 +396,7 @@ const pubkey = Array.from(Buffer.from(publicKeyBase64, 'base64'));
 
 ### Program ID
 
-- **Devnet/Localnet**: `6Jh4kA4rkZquv9XofKqgbyrRcTDF19uM5HL4xyh6gaSo`
+- **Devnet/Localnet**: `9gJ7jZaAvUafgTFPoqkCwbuvC9kpZCPtHfHjMkQ66wu9`
 
 ### Dependencies
 

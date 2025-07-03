@@ -15,7 +15,7 @@ use crate::{
 use anchor_lang::solana_program::sysvar::instructions::ID as IX_ID;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
-const MAX_TIMESTAMP_DRIFT_SECONDS: i64 = 30;
+const MAX_SLOT_DRIFT: i64 = 30;
 
 /// Arguments for the execute_instruction entrypoint
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -25,7 +25,6 @@ pub struct ExecuteInstructionArgs {
     pub client_data_json_raw: Vec<u8>,
     pub authenticator_data_raw: Vec<u8>,
     pub verify_instruction_index: u8,
-    pub cpi_data: Vec<u8>,
 }
 
 /// Entrypoint for executing smart wallet instructions
@@ -71,14 +70,15 @@ pub fn execute_instruction(
     let msg = Message::try_from_slice(&challenge_bytes)
         .map_err(|_| LazorKitError::ChallengeDeserializationError)?;
 
-    let now = Clock::get()?.unix_timestamp;
-    if (now.saturating_sub(msg.timestamp)).abs() > MAX_TIMESTAMP_DRIFT_SECONDS {
-        return Err(LazorKitError::TimestampTooOld.into());
-    }
     require!(
         msg.nonce == ctx.accounts.smart_wallet_config.last_nonce,
         LazorKitError::NonceMismatch
     );
+
+    // Validate current slot to prevent replay attacks
+    let current_slot = Clock::get()?.slot;
+    let slot_diff = (current_slot as i64).saturating_sub(msg.current_slot);
+    require!(slot_diff <= MAX_SLOT_DRIFT, LazorKitError::SlotTooOld);
 
     verify_secp256r1_instruction(
         &secp_ix,
@@ -91,14 +91,14 @@ pub fn execute_instruction(
     let id = ctx.accounts.smart_wallet_config.id;
 
     if ctx.accounts.cpi_program.key() == anchor_lang::solana_program::system_program::ID
-        && args.cpi_data.get(0..4) == Some(&[2, 0, 0, 0])
+        && msg.instruction_data.get(0..4) == Some(&[2, 0, 0, 0])
     {
         require!(
             ctx.remaining_accounts.len() >= 2,
             LazorKitError::SolTransferInsufficientAccounts
         );
 
-        let amount_bytes: [u8; 8] = args.cpi_data[4..12]
+        let amount_bytes: [u8; 8] = msg.instruction_data[4..12]
             .try_into()
             .map_err(|_| LazorKitError::CpiDataInvalid)?;
 
@@ -116,7 +116,7 @@ pub fn execute_instruction(
         };
         execute_cpi(
             ctx.remaining_accounts,
-            &args.cpi_data,
+            &msg.instruction_data,
             &ctx.accounts.cpi_program,
             Some(wallet_signer),
         )?;
@@ -129,6 +129,13 @@ pub fn execute_instruction(
         .last_nonce
         .checked_add(1)
         .ok_or(LazorKitError::NonceOverflow)?;
+
+    // transfer the fee from smart-wallet to payer
+    transfer_sol_from_pda(
+        &ctx.accounts.smart_wallet,
+        &mut ctx.accounts.payer,
+        ctx.accounts.config.execute_instruction_fee,
+    )?;
 
     Ok(())
 }

@@ -147,7 +147,6 @@ export class LazorKitProgram {
     payer: anchor.web3.PublicKey,
     credentialId: string = ''
   ): Promise<anchor.web3.Transaction> {
-    const configData = await this.program.account.config.fetch(this.config);
     const smartWallet = await this.getLastestSmartWallet();
     const [smartWalletAuthenticator] = this.smartWalletAuthenticator(
       passkeyPubkey,
@@ -210,7 +209,6 @@ export class LazorKitProgram {
         clientDataJsonRaw,
         authenticatorDataRaw,
         verifyInstructionIndex,
-        cpiData: cpiIns.data,
       })
       .accountsPartial({
         payer,
@@ -323,17 +321,26 @@ export class LazorKitProgram {
   /**
    * Build the serialized Message struct used for signing requests.
    */
-  async getMessage(smartWallet: string): Promise<Buffer> {
+  async getMessage(
+    smartWallet: string,
+    instructionData: Buffer
+  ): Promise<Buffer> {
     const smartWalletData = await this.getSmartWalletConfigData(
       new anchor.web3.PublicKey(smartWallet)
     );
 
     class Message {
       nonce: anchor.BN;
-      timestamp: anchor.BN;
-      constructor(fields: { nonce: anchor.BN; timestamp: anchor.BN }) {
+      current_slot: anchor.BN;
+      instruction_data: Buffer;
+      constructor(fields: {
+        nonce: anchor.BN;
+        current_slot: anchor.BN;
+        instruction_data: Buffer;
+      }) {
         this.nonce = fields.nonce;
-        this.timestamp = fields.timestamp;
+        this.current_slot = fields.current_slot;
+        this.instruction_data = fields.instruction_data;
       }
     }
 
@@ -344,7 +351,8 @@ export class LazorKitProgram {
           kind: 'struct',
           fields: [
             ['nonce', 'u64'],
-            ['timestamp', 'i64'],
+            ['current_slot', 'i64'],
+            ['instruction_data', 'vec<u8>'],
           ],
         },
       ],
@@ -354,7 +362,8 @@ export class LazorKitProgram {
       schema,
       new Message({
         nonce: smartWalletData.lastNonce,
-        timestamp: new anchor.BN(Date.now()),
+        current_slot: new anchor.BN(await this.connection.getSlot()),
+        instruction_data: instructionData,
       })
     );
     return Buffer.from(encoded);
