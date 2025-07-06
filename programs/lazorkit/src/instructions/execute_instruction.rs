@@ -15,7 +15,7 @@ use crate::{
 use anchor_lang::solana_program::sysvar::instructions::ID as IX_ID;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
-const MAX_SLOT_DRIFT: i64 = 30;
+const MAX_TIMESTAMP_DRIFT: i64 = 15;
 
 /// Arguments for the execute_instruction entrypoint
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -75,10 +75,20 @@ pub fn execute_instruction(
         LazorKitError::NonceMismatch
     );
 
-    // Validate current slot to prevent replay attacks
-    let current_slot = Clock::get()?.slot;
-    let slot_diff = (current_slot as i64).saturating_sub(msg.current_slot);
-    require!(slot_diff <= MAX_SLOT_DRIFT, LazorKitError::SlotTooOld);
+    // Validate current unix timestamp to prevent replay attacks (15s window)
+    let current_ts = Clock::get()?.unix_timestamp;
+    let time_diff = current_ts - msg.current_timestamp;
+
+    // Reject if message too old
+    require!(
+        time_diff <= MAX_TIMESTAMP_DRIFT,
+        LazorKitError::TimestampTooOld
+    );
+    // Reject if message too far in the future
+    require!(
+        time_diff >= -MAX_TIMESTAMP_DRIFT,
+        LazorKitError::TimestampTooNew
+    );
 
     verify_secp256r1_instruction(
         &secp_ix,
