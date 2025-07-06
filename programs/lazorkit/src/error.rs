@@ -40,10 +40,6 @@ pub enum LazorKitError {
     TimestampTooOld,
     #[msg("Message timestamp is too far in the future")]
     TimestampTooNew,
-    #[msg("Message slot is too far in the past")]
-    SlotTooOld,
-    #[msg("Message slot is too far in the future")]
-    SlotTooNew,
     #[msg("Nonce mismatch: expected different value")]
     NonceMismatch,
     #[msg("Nonce overflow: cannot increment further")]
